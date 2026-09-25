@@ -12,6 +12,14 @@ export interface ShotEvent {
   ship: Ship | null;
 }
 
+/** Most recent shot fired by `by`, or null if they have not fired yet. */
+export function lastShotBy(log: readonly ShotEvent[], by: ShotEvent['by']): ShotEvent | null {
+  for (let i = log.length - 1; i >= 0; i--) {
+    if (log[i].by === by) return log[i];
+  }
+  return null;
+}
+
 export class Game {
   phase: Phase = 'placement';
   winner: Winner = null;
