@@ -79,23 +79,30 @@ const background = [
 
 const RECORD_KEY = 'battleship.record';
 
-function loadRecord(): PlayerRecord {
+/** False once localStorage has failed; the record is then kept in memory only. */
+let storageOk = true;
+
+/** Latest persisted record, or null when storage is unavailable. */
+function loadRecord(): PlayerRecord | null {
+  if (!storageOk) return null;
   try {
     return parseRecord(localStorage.getItem(RECORD_KEY));
   } catch {
-    return parseRecord(null);
+    storageOk = false;
+    return null;
   }
 }
 
 function saveRecord(rec: PlayerRecord): void {
+  if (!storageOk) return;
   try {
     localStorage.setItem(RECORD_KEY, JSON.stringify(rec));
   } catch {
-    /* storage unavailable (private mode, quota) — record is kept in memory only */
+    storageOk = false;
   }
 }
 
-let record = loadRecord();
+let record = loadRecord() ?? parseRecord(null);
 let game = new Game();
 /** Set once the finished game has been added to the persisted record. */
 let recorded = false;
@@ -379,7 +386,8 @@ function afterPlayerShot(phase: Phase, wait: number): void {
 function finishGame(wait: number): void {
   if (!recorded) {
     recorded = true;
-    record = updateRecord(loadRecord(), game.winner, computeStats(game.log, game.player).player.shots);
+    const shots = computeStats(game.log, game.player).player.shots;
+    record = updateRecord(loadRecord() ?? record, game.winner, shots);
     saveRecord(record);
   }
   sinkTimers.push(setTimeout(showGameOver, wait));
@@ -485,7 +493,8 @@ function newGame(): void {
   cursor.set(playerBoardEl, 0);
   cursor.set(enemyBoardEl, 0);
   render();
-  hideGameOver();
+  if (overlay.hidden) rotateBtn.focus();
+  else hideGameOver();
 }
 
 rotateBtn.addEventListener('click', toggleOrientation);
