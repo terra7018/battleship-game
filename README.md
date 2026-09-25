@@ -2,7 +2,9 @@
 
 Single-player Battleship in the browser against a hunt-and-target AI. No backend, no frameworks — TypeScript + Vite.
 
-## Play
+Play online: https://terra7018.github.io/battleship-game/
+
+## Play locally
 
 ```sh
 npm install
