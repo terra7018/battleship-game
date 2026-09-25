@@ -184,6 +184,13 @@ main {
   justify-content: center;
 }
 
+@media (max-width: 400px) {
+  .board-wrap {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}
+
 .board {
   display: grid;
   grid-template-columns: repeat(10, var(--cell));
