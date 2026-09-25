@@ -375,6 +375,7 @@ playerBoardEl.addEventListener('click', (e) => {
 
 playerBoardEl.addEventListener('pointerdown', (e) => {
   if (game.phase !== 'placement' || drag || e.button !== 0) return;
+  spentPointer = null;
   const i = cellFromEvent(e);
   if (i === null) return;
   const shipId = game.player.occupancy[i];
@@ -401,36 +402,43 @@ playerBoardEl.addEventListener('pointermove', (e) => {
   }
 });
 
-/** Set after a drag so the synthesized click that follows pointerup is ignored. */
-let suppressClick = false;
+/** Pointer whose press started a drag that has since ended; its eventual click must not place a ship. */
+let spentPointer: number | null = null;
 
-function endDrag(commit: boolean): void {
+/**
+ * Ends the current drag. `commit` moves the ship if the drop is valid; `pointerEnded` tells
+ * whether the pointer itself has been released (as opposed to the drag being cancelled by a
+ * button or key while the pointer is still down).
+ */
+function endDrag(commit: boolean, pointerEnded: boolean): void {
   if (!drag) return;
   const { shipId, pointerId } = drag;
   const target = commit && game.phase === 'placement' ? dragCells() : null;
   if (target?.ok) moveShip(game.player, shipId, target.cells);
   if (playerBoardEl.hasPointerCapture(pointerId)) playerBoardEl.releasePointerCapture(pointerId);
-  suppressClick = drag.moved;
+  // A plain press-and-release on a ship may still fall through to click-to-place; a real drag,
+  // or a press whose drag was cancelled externally, must not.
+  spentPointer = drag.moved || !pointerEnded ? pointerId : null;
   drag = null;
   render();
-  setTimeout(() => (suppressClick = false), 0);
 }
 
 playerBoardEl.addEventListener(
   'click',
   (e) => {
-    if (!suppressClick) return;
-    suppressClick = false;
+    if (spentPointer === null) return;
+    spentPointer = null;
     e.stopImmediatePropagation();
   },
   true,
 );
 
 playerBoardEl.addEventListener('pointerup', (e) => {
-  if (drag && e.pointerId === drag.pointerId) endDrag(true);
+  if (drag && e.pointerId === drag.pointerId) endDrag(true, true);
 });
 playerBoardEl.addEventListener('pointercancel', (e) => {
-  if (drag && e.pointerId === drag.pointerId) endDrag(false);
+  if (drag && e.pointerId === drag.pointerId) endDrag(false, true);
+  else if (e.pointerId === spentPointer) spentPointer = null;
 });
 
 enemyBoardEl.addEventListener('click', (e) => {
@@ -604,23 +612,23 @@ function newGame(): void {
 
 rotateBtn.addEventListener('click', toggleOrientation);
 randomBtn.addEventListener('click', () => {
-  endDrag(false);
+  endDrag(false, false);
   while (game.player.ships.length) removeShip(game.player, game.player.ships.length - 1);
   randomFleet(game.player);
   render();
 });
 randomRemainingBtn.addEventListener('click', () => {
-  endDrag(false);
+  endDrag(false, false);
   randomFleetRemaining(game.player);
   render();
 });
 undoBtn.addEventListener('click', () => {
-  endDrag(false);
+  endDrag(false, false);
   removeShip(game.player, game.player.ships.length - 1);
   render();
 });
 startBtn.addEventListener('click', () => {
-  endDrag(false);
+  endDrag(false, false);
   game.start();
   setCursor(enemyBoardEl, cursor.get(enemyBoardEl)!, true);
 });
@@ -645,7 +653,7 @@ document.addEventListener('keydown', (e) => {
   if (!overlay.hidden) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key.toLowerCase() === 'r' && game.phase === 'placement') toggleOrientation();
-  if (e.key === 'Escape' && drag) endDrag(false);
+  if (e.key === 'Escape' && drag) endDrag(false, false);
 });
 
 buildBoard(playerBoardEl);
