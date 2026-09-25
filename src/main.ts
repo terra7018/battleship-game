@@ -1,8 +1,11 @@
 import {
+  canMove,
   canPlace,
   isSunk,
+  moveShip,
   placeShip,
   randomFleet,
+  randomFleetRemaining,
   removeShip,
   shipCells,
   shipCellsClamped,
@@ -83,6 +86,7 @@ const statusEl = $('status');
 const turnEl = $('turn');
 const rotateBtn = $<HTMLButtonElement>('rotate');
 const randomBtn = $<HTMLButtonElement>('random');
+const randomRemainingBtn = $<HTMLButtonElement>('random-remaining');
 const undoBtn = $<HTMLButtonElement>('undo');
 const startBtn = $<HTMLButtonElement>('start');
 const newGameBtn = $<HTMLButtonElement>('new-game');
@@ -147,6 +151,18 @@ let orientation: Orientation = 'h';
 let aiPace: AiPace = loadPace();
 paceSelect.value = aiPace;
 let hoverCell: number | null = null;
+/** A placed ship being dragged to a new position on Your Fleet. */
+interface Drag {
+  shipId: number;
+  pointerId: number;
+  /** Index within the ship's cells that the pointer grabbed. */
+  offset: number;
+  orientation: Orientation;
+  /** Cell currently under the pointer, or null when off the board. */
+  over: number | null;
+  moved: boolean;
+}
+let drag: Drag | null = null;
 /** Roving-tabindex cursor per board: the single cell that is tabbable. */
 const cursor = new Map<HTMLElement, number>([
   [playerBoardEl, 0],
@@ -204,8 +220,25 @@ function previewCells(): { cells: number[]; ok: boolean } | null {
   };
 }
 
+/** Cells the dragged ship would occupy at the pointer, and whether it may land there. */
+function dragCells(): { cells: number[]; ok: boolean } | null {
+  if (!drag || drag.over === null) return null;
+  const ship = game.player.ships[drag.shipId];
+  if (!ship) return null;
+  const r = rowOf(drag.over) - (drag.orientation === 'v' ? drag.offset : 0);
+  const c = colOf(drag.over) - (drag.orientation === 'h' ? drag.offset : 0);
+  const exact = shipCells(r, c, ship.length, drag.orientation);
+  return {
+    cells: exact ?? shipCellsClamped(r, c, ship.length, drag.orientation),
+    ok: canMove(game.player, drag.shipId, exact),
+  };
+}
+
 function renderBoard(el: HTMLElement, board: Board, revealShips: boolean, tabbable: boolean): void {
-  const preview = el === playerBoardEl ? previewCells() : null;
+  const isPlayer = el === playerBoardEl;
+  const preview = isPlayer ? (drag ? dragCells() : previewCells()) : null;
+  const placing = isPlayer && game.phase === 'placement';
+  const lifted = drag && isPlayer ? drag.shipId : -1;
   const cells = el.children;
   const focusable = tabbable ? cursor.get(el) : undefined;
   const lastShot = lastShotBy(game.log, el === enemyBoardEl ? 'player' : 'ai')?.cell;
@@ -228,7 +261,8 @@ function renderBoard(el: HTMLElement, board: Board, revealShips: boolean, tabbab
     } else {
       cell.style.removeProperty('--order');
     }
-    if (revealShips && shipId !== -1 && !shot) cell.classList.add('ship');
+    if (revealShips && shipId !== -1 && !shot && shipId !== lifted) cell.classList.add('ship');
+    if (placing && shipId !== -1) cell.classList.add('movable');
     if (preview && preview.cells.includes(i)) {
       cell.classList.add('preview');
       if (!preview.ok) cell.classList.add('invalid');
@@ -267,11 +301,14 @@ function render(): void {
   renderFleet(enemyFleetEl, game.enemy, false);
 
   playerBoardEl.classList.toggle('interactive', placing && !game.fleetComplete);
+  playerBoardEl.classList.toggle('dragging', drag !== null);
   enemyBoardEl.classList.toggle('interactive', game.phase === 'player-turn');
 
   rotateBtn.hidden = randomBtn.hidden = undoBtn.hidden = startBtn.hidden = !placing;
+  randomRemainingBtn.hidden = !placing;
   newGameBtn.hidden = placing;
   undoBtn.disabled = game.player.ships.length === 0;
+  randomRemainingBtn.disabled = game.fleetComplete;
   startBtn.disabled = !game.fleetComplete;
   rotateBtn.textContent = `Rotate (R): ${orientation === 'h' ? 'Horizontal' : 'Vertical'}`;
 
@@ -363,9 +400,89 @@ playerBoardEl.addEventListener('focusout', (e) => {
 });
 playerBoardEl.addEventListener('click', (e) => {
   const i = cellFromEvent(e);
-  if (i === null) return;
+  if (i === null || drag) return;
   setCursor(playerBoardEl, i, true);
   placeAt(i);
+});
+
+playerBoardEl.addEventListener('pointerdown', (e) => {
+  if (game.phase !== 'placement' || drag || e.button !== 0) return;
+  spentPointers.delete(e.pointerId);
+  const i = cellFromEvent(e);
+  if (i === null) return;
+  const shipId = game.player.occupancy[i];
+  if (shipId === -1) return;
+  const ship = game.player.ships[shipId];
+  const offset = ship.cells.indexOf(i);
+  const orientation: Orientation =
+    ship.length > 1 && ship.cells[1] - ship.cells[0] === SIZE ? 'v' : 'h';
+  drag = { shipId, pointerId: e.pointerId, offset, orientation, over: i, moved: false };
+  playerBoardEl.setPointerCapture(e.pointerId);
+  e.preventDefault();
+  render();
+});
+
+/** Player-board cell under the pointer, or null when the pointer is off the board. */
+function cellAtPoint(e: PointerEvent): number | null {
+  const target = document.elementFromPoint(e.clientX, e.clientY);
+  const cellEl = target?.closest<HTMLElement>('#player-board .cell') ?? null;
+  return cellEl?.dataset.i !== undefined ? Number(cellEl.dataset.i) : null;
+}
+
+/** Refreshes the dragged ship's position from the pointer; returns true if it changed. */
+function trackDrag(e: PointerEvent): boolean {
+  if (!drag || e.pointerId !== drag.pointerId) return false;
+  const over = cellAtPoint(e);
+  if (over === drag.over) return false;
+  drag.over = over;
+  drag.moved = true;
+  return true;
+}
+
+playerBoardEl.addEventListener('pointermove', (e) => {
+  if (trackDrag(e)) render();
+});
+
+/** Pointers whose press started a drag that has since ended; their eventual click must not place a ship. */
+const spentPointers = new Set<number>();
+
+/**
+ * Ends the current drag. `commit` moves the ship if the drop is valid; `pointerEnded` tells
+ * whether the pointer itself has been released (as opposed to the drag being cancelled by a
+ * button or key while the pointer is still down).
+ */
+function endDrag(commit: boolean, pointerEnded: boolean): void {
+  if (!drag) return;
+  const { shipId, pointerId } = drag;
+  const target = commit && game.phase === 'placement' ? dragCells() : null;
+  if (target?.ok) moveShip(game.player, shipId, target.cells);
+  if (playerBoardEl.hasPointerCapture(pointerId)) playerBoardEl.releasePointerCapture(pointerId);
+  // A plain press-and-release on a ship may still fall through to click-to-place; a real drag,
+  // or a press whose drag was cancelled externally, must not.
+  if (drag.moved || !pointerEnded) spentPointers.add(pointerId);
+  drag = null;
+  render();
+}
+
+playerBoardEl.addEventListener(
+  'click',
+  (e) => {
+    // click is a PointerEvent in current browsers; fall back to any spent pointer otherwise
+    const id = e instanceof PointerEvent ? e.pointerId : spentPointers.values().next().value;
+    if (id === undefined || !spentPointers.delete(id)) return;
+    e.stopImmediatePropagation();
+  },
+  true,
+);
+
+playerBoardEl.addEventListener('pointerup', (e) => {
+  if (!drag || e.pointerId !== drag.pointerId) return;
+  trackDrag(e);
+  endDrag(true, true);
+});
+playerBoardEl.addEventListener('pointercancel', (e) => {
+  if (drag && e.pointerId === drag.pointerId) endDrag(false, true);
+  else spentPointers.delete(e.pointerId);
 });
 
 enemyBoardEl.addEventListener('click', (e) => {
@@ -515,7 +632,8 @@ function inspectBattlefield(): void {
 }
 
 function toggleOrientation(): void {
-  orientation = orientation === 'h' ? 'v' : 'h';
+  if (drag) drag.orientation = drag.orientation === 'h' ? 'v' : 'h';
+  else orientation = orientation === 'h' ? 'v' : 'h';
   render();
 }
 
@@ -526,6 +644,7 @@ function newGame(): void {
   sinkTimers = [];
   sinking.clear();
   game = new Game(Math.random, difficulty);
+  drag = null;
   recorded = false;
   inspecting = false;
   hoverCell = null;
@@ -538,15 +657,23 @@ function newGame(): void {
 
 rotateBtn.addEventListener('click', toggleOrientation);
 randomBtn.addEventListener('click', () => {
+  endDrag(false, false);
   while (game.player.ships.length) removeShip(game.player, game.player.ships.length - 1);
   randomFleet(game.player);
   render();
 });
+randomRemainingBtn.addEventListener('click', () => {
+  endDrag(false, false);
+  randomFleetRemaining(game.player);
+  render();
+});
 undoBtn.addEventListener('click', () => {
+  endDrag(false, false);
   removeShip(game.player, game.player.ships.length - 1);
   render();
 });
 startBtn.addEventListener('click', () => {
+  endDrag(false, false);
   game.start();
   setCursor(enemyBoardEl, cursor.get(enemyBoardEl)!, true);
 });
@@ -577,6 +704,7 @@ document.addEventListener('keydown', (e) => {
   if (!overlay.hidden) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key.toLowerCase() === 'r' && game.phase === 'placement') toggleOrientation();
+  if (e.key === 'Escape' && drag) endDrag(false, false);
 });
 
 buildBoard(playerBoardEl);
