@@ -48,3 +48,7 @@ test/engine.test.ts   Vitest unit tests (seeded RNG, deterministic)
 | `npm run build`     | production build into `dist/` |
 
 CI runs typecheck, tests and build on every PR, and deploys `main` to GitHub Pages (enable *Settings → Pages → Source: GitHub Actions* once).
+
+## Changelog
+
+See [docs/CHANGELOG.md](docs/CHANGELOG.md) for every merged PR: bugs found and how they were fixed, features added and how they work.
