@@ -332,18 +332,19 @@ function fireAt(i: number): void {
 }
 
 function afterPlayerShot(phase: Phase, wait: number): void {
-  if (phase === 'ai-turn') scheduleAi();
+  if (phase === 'ai-turn') scheduleAi(wait);
   else if (phase === 'game-over') sinkTimers.push(setTimeout(showGameOver, wait));
 }
 
-function scheduleAi(): void {
+/** Fires the AI shot after the pace delay, but never before `minDelay` (e.g. a running sink animation). */
+function scheduleAi(minDelay = 0): void {
   aiTimer = setTimeout(() => {
     aiTimer = null;
     const ev = game.aiFire();
     const wait = animateSink(game.player, ev);
     render();
     if (game.phase === 'game-over') sinkTimers.push(setTimeout(showGameOver, wait));
-  }, aiDelayMs(aiPace));
+  }, Math.max(minDelay, aiDelayMs(aiPace)));
 }
 
 function showGameOver(): void {
