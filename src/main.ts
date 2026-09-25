@@ -281,7 +281,6 @@ function render(): void {
   turnEl.classList.toggle('enemy', game.phase === 'ai-turn');
 
   muteBtn.setAttribute('aria-pressed', String(sfx.muted));
-  muteBtn.title = sfx.muted ? 'Unmute sound' : 'Mute sound';
 }
 
 function statusText(): string {
