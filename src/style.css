@@ -412,6 +412,41 @@ button {
   cursor: pointer;
 }
 
+.setting {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.setting select {
+  font: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+  padding: 0.3rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #3a5a80;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.setting select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 700px) {
+  .setting {
+    margin: 0 0 0.25rem;
+    font-size: 0.75rem;
+  }
+}
+
 button:hover:not(:disabled) {
   background: var(--water-hover);
 }

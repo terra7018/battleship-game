@@ -9,13 +9,27 @@ import {
 } from './engine/board';
 import { isArrowKey, moveCursor } from './engine/cursor';
 import { Game, Phase, ShotEvent, lastShotBy } from './engine/game';
+import { AiPace, DEFAULT_PACE, aiDelayMs, isAiPace } from './engine/pace';
 import { Board, FLEET, Orientation, SIZE, colOf, rowOf } from './engine/types';
 
-const AI_DELAY_MIN_MS = 3000;
-const AI_DELAY_MAX_MS = 10000;
+const PACE_KEY = 'battleship.aiPace';
 
-const aiDelayMs = (): number =>
-  AI_DELAY_MIN_MS + Math.random() * (AI_DELAY_MAX_MS - AI_DELAY_MIN_MS);
+function loadPace(): AiPace {
+  try {
+    const v = localStorage.getItem(PACE_KEY);
+    return isAiPace(v) ? v : DEFAULT_PACE;
+  } catch {
+    return DEFAULT_PACE;
+  }
+}
+
+function savePace(pace: AiPace): void {
+  try {
+    localStorage.setItem(PACE_KEY, pace);
+  } catch {
+    /* storage unavailable; keep in-memory choice */
+  }
+}
 
 const SINK_STAGGER_MS = 120;
 const SINK_CELL_MS = 900;
@@ -42,6 +56,7 @@ const overlay = $('overlay');
 const overlayTitle = $('overlay-title');
 const overlayText = $('overlay-text');
 const overlayNew = $<HTMLButtonElement>('overlay-new');
+const paceSelect = $<HTMLSelectElement>('ai-pace');
 const dialog = overlay.querySelector<HTMLElement>('.dialog')!;
 const background = [
   document.querySelector<HTMLElement>('header')!,
@@ -51,6 +66,8 @@ const background = [
 
 let game = new Game();
 let orientation: Orientation = 'h';
+let aiPace: AiPace = loadPace();
+paceSelect.value = aiPace;
 let hoverCell: number | null = null;
 /** Roving-tabindex cursor per board: the single cell that is tabbable. */
 const cursor = new Map<HTMLElement, number>([
@@ -315,18 +332,19 @@ function fireAt(i: number): void {
 }
 
 function afterPlayerShot(phase: Phase, wait: number): void {
-  if (phase === 'ai-turn') scheduleAi();
+  if (phase === 'ai-turn') scheduleAi(wait);
   else if (phase === 'game-over') sinkTimers.push(setTimeout(showGameOver, wait));
 }
 
-function scheduleAi(): void {
+/** Fires the AI shot after the pace delay, but never before `minDelay` (e.g. a running sink animation). */
+function scheduleAi(minDelay = 0): void {
   aiTimer = setTimeout(() => {
     aiTimer = null;
     const ev = game.aiFire();
     const wait = animateSink(game.player, ev);
     render();
     if (game.phase === 'game-over') sinkTimers.push(setTimeout(showGameOver, wait));
-  }, aiDelayMs());
+  }, Math.max(minDelay, aiDelayMs(aiPace)));
 }
 
 function showGameOver(): void {
@@ -408,6 +426,11 @@ startBtn.addEventListener('click', () => {
   setCursor(enemyBoardEl, cursor.get(enemyBoardEl)!, true);
 });
 newGameBtn.addEventListener('click', newGame);
+paceSelect.addEventListener('change', () => {
+  aiPace = isAiPace(paceSelect.value) ? paceSelect.value : DEFAULT_PACE;
+  paceSelect.value = aiPace;
+  savePace(aiPace);
+});
 overlayNew.addEventListener('click', newGame);
 overlay.addEventListener('keydown', trapFocus);
 document.addEventListener('pointerdown', () => {

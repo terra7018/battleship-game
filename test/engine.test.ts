@@ -12,6 +12,7 @@ import {
 } from '../src/engine/board';
 import { isArrowKey, moveCursor } from '../src/engine/cursor';
 import { Game, ShotEvent, lastShotBy } from '../src/engine/game';
+import { DEFAULT_PACE, PACE_RANGES, aiDelayMs, isAiPace } from '../src/engine/pace';
 import { FLEET, SIZE, idx } from '../src/engine/types';
 
 function seeded(seed: number): () => number {
@@ -201,5 +202,26 @@ describe('keyboard cursor', () => {
     }
     expect(isArrowKey('Enter')).toBe(false);
     expect(isArrowKey('toString')).toBe(false);
+  });
+});
+
+describe('ai pace', () => {
+  it('defaults to human-like', () => {
+    expect(DEFAULT_PACE).toBe('human');
+    expect(PACE_RANGES.human).toEqual({ min: 3000, max: 10000 });
+  });
+
+  it('quick delays are well under a second', () => {
+    expect(aiDelayMs('quick', () => 0)).toBe(500);
+    expect(aiDelayMs('quick', () => 0.999)).toBeLessThan(1000);
+    expect(aiDelayMs('human', () => 0)).toBe(3000);
+    expect(aiDelayMs('human', () => 1)).toBe(10000);
+  });
+
+  it('validates persisted values', () => {
+    expect(isAiPace('human')).toBe(true);
+    expect(isAiPace('quick')).toBe(true);
+    expect(isAiPace(null)).toBe(false);
+    expect(isAiPace('fast')).toBe(false);
   });
 });
