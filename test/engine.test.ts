@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HuntTargetAi } from '../src/engine/ai';
+import { Ai, EasyAi, HardAi, HuntTargetAi } from '../src/engine/ai';
 import {
   allSunk,
   canPlace,
@@ -11,6 +11,13 @@ import {
   shipCells,
 } from '../src/engine/board';
 import { isArrowKey, moveCursor } from '../src/engine/cursor';
+import {
+  DEFAULT_DIFFICULTY,
+  DIFFICULTY_LABELS,
+  Difficulty,
+  createAi,
+  isDifficulty,
+} from '../src/engine/difficulty';
 import { Game, ShotEvent, lastShotBy } from '../src/engine/game';
 import {
   EMPTY_RECORD,
@@ -22,7 +29,7 @@ import {
   updateRecord,
 } from '../src/engine/stats';
 import { DEFAULT_PACE, PACE_RANGES, aiDelayMs, isAiPace } from '../src/engine/pace';
-import { FLEET, SIZE, idx } from '../src/engine/types';
+import { FLEET, SIZE, colOf, idx, rowOf } from '../src/engine/types';
 
 function seeded(seed: number): () => number {
   let s = seed >>> 0;
@@ -142,6 +149,107 @@ describe('AI', () => {
     ai.notify(b, idx(5, 4), fireAt(b, idx(5, 4)).result);
     const next = ai.chooseTarget(b);
     expect([idx(5, 3), idx(5, 5), idx(4, 4), idx(6, 4)]).toContain(next);
+  });
+});
+
+describe('AI difficulty', () => {
+  const LEVELS: Difficulty[] = ['easy', 'normal', 'hard'];
+
+  /** Plays `ai` against a fresh random fleet; returns shots used. Fails on a repeated cell. */
+  function playOut(ai: Ai, rng: () => number): number {
+    const b = createBoard();
+    randomFleet(b, rng);
+    let shots = 0;
+    while (!allSunk(b)) {
+      const cell = ai.chooseTarget(b);
+      expect(b.shots[cell]).toBeUndefined();
+      ai.notify(b, cell, fireAt(b, cell).result);
+      shots++;
+    }
+    return shots;
+  }
+
+  function average(level: Difficulty, runs: number): number {
+    let total = 0;
+    for (let seed = 1; seed <= runs; seed++) {
+      const rng = seeded(seed * 104729);
+      total += playOut(createAi(level, rng), rng);
+    }
+    return total / runs;
+  }
+
+  it('creates the matching AI for each level, defaulting to Normal', () => {
+    expect(DEFAULT_DIFFICULTY).toBe('normal');
+    expect(createAi('easy', seeded(1))).toBeInstanceOf(EasyAi);
+    expect(createAi('normal', seeded(1))).toBeInstanceOf(HuntTargetAi);
+    expect(createAi('hard', seeded(1))).toBeInstanceOf(HardAi);
+    expect(DIFFICULTY_LABELS.hard).toBe('Hard');
+  });
+
+  it('validates persisted values', () => {
+    for (const l of LEVELS) expect(isDifficulty(l)).toBe(true);
+    expect(isDifficulty('insane')).toBe(false);
+    expect(isDifficulty(null)).toBe(false);
+  });
+
+  it.each(LEVELS)('%s sinks a random fleet in <= 100 shots without repeating a cell', (level) => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const rng = seeded(seed * 31 + 7);
+      expect(playOut(createAi(level, rng), rng)).toBeLessThanOrEqual(SIZE * SIZE);
+    }
+  });
+
+  it('orders average shots to win: Hard < Normal < Easy', () => {
+    const runs = 150;
+    const easy = average('easy', runs);
+    const normal = average('normal', runs);
+    const hard = average('hard', runs);
+    expect(hard).toBeLessThan(normal);
+    expect(easy).toBeGreaterThan(normal);
+  });
+
+  it('Hard restricts to placements covering pending hits', () => {
+    const b = createBoard();
+    placeShip(b, FLEET[0], shipCells(5, 2, 5, 'h')!);
+    const ai = new HardAi(seeded(9));
+    ai.notify(b, idx(5, 4), fireAt(b, idx(5, 4)).result);
+    expect([idx(5, 3), idx(5, 5), idx(4, 4), idx(6, 4)]).toContain(ai.chooseTarget(b));
+    ai.notify(b, idx(5, 5), fireAt(b, idx(5, 5)).result);
+    expect([idx(5, 3), idx(5, 6)]).toContain(ai.chooseTarget(b));
+  });
+
+  it('Hard opens on a central cell where the most placements overlap', () => {
+    const b = createBoard();
+    randomFleet(b, seeded(2));
+    const first = new HardAi(seeded(1)).chooseTarget(b);
+    const r = rowOf(first);
+    const c = colOf(first);
+    expect(r).toBeGreaterThanOrEqual(3);
+    expect(r).toBeLessThanOrEqual(6);
+    expect(c).toBeGreaterThanOrEqual(3);
+    expect(c).toBeLessThanOrEqual(6);
+  });
+
+  it('Easy sometimes wanders even with a pending hit', () => {
+    const b = createBoard();
+    placeShip(b, FLEET[0], shipCells(5, 2, 5, 'h')!);
+    const ai = new EasyAi(() => 0); // below wanderChance, picks the first open cell
+    ai.notify(b, idx(5, 4), fireAt(b, idx(5, 4)).result);
+    expect(ai.chooseTarget(b)).toBe(0);
+    const focused = new EasyAi(() => 0.5); // above wanderChance, probes a neighbour
+    focused.notify(b, idx(5, 4), 'hit');
+    expect([idx(5, 3), idx(5, 5), idx(4, 4), idx(6, 4)]).toContain(focused.chooseTarget(b));
+  });
+
+  it('Game accepts a difficulty and only allows changing it during placement', () => {
+    const g = new Game(seeded(3), 'hard');
+    expect(g.difficulty).toBe('hard');
+    g.setDifficulty('easy');
+    expect(g.difficulty).toBe('easy');
+    randomFleet(g.player, seeded(3));
+    g.start();
+    expect(() => g.setDifficulty('normal')).toThrow();
+    expect(new Game(seeded(1)).difficulty).toBe('normal');
   });
 });
 

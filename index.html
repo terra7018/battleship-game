@@ -11,8 +11,17 @@
       <h1>Battleship</h1>
       <p class="status-row">
         <span id="turn" class="turn" hidden></span>
+        <span id="difficulty-badge" class="badge" hidden></span>
         <span id="status" class="status" aria-live="polite"></span>
       </p>
+      <label class="setting" for="ai-difficulty">
+        AI difficulty
+        <select id="ai-difficulty">
+          <option value="easy">Easy</option>
+          <option value="normal">Normal</option>
+          <option value="hard">Hard</option>
+        </select>
+      </label>
       <label class="setting" for="ai-pace">
         AI pace
         <select id="ai-pace">
@@ -52,6 +61,7 @@
       <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="overlay-title" aria-describedby="overlay-text">
         <h2 id="overlay-title"></h2>
         <p id="overlay-text"></p>
+        <p id="overlay-difficulty" class="record"></p>
         <dl id="overlay-stats" class="stats"></dl>
         <p id="overlay-record" class="record"></p>
         <div class="dialog-actions">
