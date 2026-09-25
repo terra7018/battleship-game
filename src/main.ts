@@ -79,6 +79,7 @@ function saveRecord(rec: PlayerRecord): void {
   }
 }
 
+
 let record = loadRecord();
 let game = new Game();
 /** Set once the finished game has been added to the persisted record. */
@@ -331,7 +332,17 @@ function fireAt(i: number): void {
 
 function afterPlayerShot(phase: Phase, wait: number): void {
   if (phase === 'ai-turn') scheduleAi();
-  else if (phase === 'game-over') sinkTimers.push(setTimeout(showGameOver, wait));
+  else if (phase === 'game-over') finishGame(wait);
+}
+
+/** Records the result as soon as the game ends, then reveals the overlay after the sink animation. */
+function finishGame(wait: number): void {
+  if (!recorded) {
+    recorded = true;
+    record = updateRecord(loadRecord(), game.winner, computeStats(game.log, game.player).player.shots);
+    saveRecord(record);
+  }
+  sinkTimers.push(setTimeout(showGameOver, wait));
 }
 
 function scheduleAi(): void {
@@ -340,7 +351,7 @@ function scheduleAi(): void {
     const ev = game.aiFire();
     const wait = animateSink(game.player, ev);
     render();
-    if (game.phase === 'game-over') sinkTimers.push(setTimeout(showGameOver, wait));
+    if (game.phase === 'game-over') finishGame(wait);
   }, aiDelayMs());
 }
 
@@ -351,11 +362,6 @@ function showGameOver(): void {
   overlayText.textContent = won
     ? `You destroyed the enemy fleet in ${stats.player.shots} shots.`
     : 'The enemy sank your entire fleet.';
-  if (!recorded) {
-    recorded = true;
-    record = updateRecord(record, game.winner, stats.player.shots);
-    saveRecord(record);
-  }
   renderStats(stats);
   overlayRecord.textContent = formatRecord(record);
   overlay.hidden = false;
