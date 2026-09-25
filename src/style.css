@@ -155,6 +155,20 @@ main {
   background: var(--water-hover);
 }
 
+.cell:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -1px;
+  z-index: 1;
+}
+
+body:not(.pointer-input) .board.interactive .cell:not(.hit):not(.miss):not(.preview):focus-visible {
+  background: var(--water-hover);
+}
+
+.pointer-input .cell:focus-visible {
+  outline: none;
+}
+
 .cell.ship {
   background: var(--ship);
 }

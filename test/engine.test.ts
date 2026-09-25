@@ -10,6 +10,7 @@ import {
   removeShip,
   shipCells,
 } from '../src/engine/board';
+import { isArrowKey, moveCursor } from '../src/engine/cursor';
 import { Game } from '../src/engine/game';
 import { FLEET, SIZE, idx } from '../src/engine/types';
 
@@ -160,5 +161,36 @@ describe('Game flow', () => {
     expect(() => g.aiFire()).toThrow();
     g.playerFire(0);
     expect(() => g.playerFire(1)).toThrow();
+  });
+});
+
+describe('keyboard cursor', () => {
+  it('moves one cell per arrow key', () => {
+    const start = idx(4, 4);
+    expect(moveCursor(start, 'ArrowUp')).toBe(idx(3, 4));
+    expect(moveCursor(start, 'ArrowDown')).toBe(idx(5, 4));
+    expect(moveCursor(start, 'ArrowLeft')).toBe(idx(4, 3));
+    expect(moveCursor(start, 'ArrowRight')).toBe(idx(4, 5));
+  });
+
+  it('clamps at the grid edges instead of wrapping', () => {
+    expect(moveCursor(idx(0, 0), 'ArrowUp')).toBe(idx(0, 0));
+    expect(moveCursor(idx(0, 0), 'ArrowLeft')).toBe(idx(0, 0));
+    expect(moveCursor(idx(9, 9), 'ArrowDown')).toBe(idx(9, 9));
+    expect(moveCursor(idx(9, 9), 'ArrowRight')).toBe(idx(9, 9));
+    expect(moveCursor(idx(3, 9), 'ArrowRight')).toBe(idx(3, 9));
+  });
+
+  it('Home/End jump to the row ends', () => {
+    expect(moveCursor(idx(6, 4), 'Home')).toBe(idx(6, 0));
+    expect(moveCursor(idx(6, 4), 'End')).toBe(idx(6, SIZE - 1));
+  });
+
+  it('recognises only navigation keys', () => {
+    for (const k of ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End']) {
+      expect(isArrowKey(k)).toBe(true);
+    }
+    expect(isArrowKey('Enter')).toBe(false);
+    expect(isArrowKey('toString')).toBe(false);
   });
 });
