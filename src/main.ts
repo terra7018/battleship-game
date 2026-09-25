@@ -8,7 +8,17 @@ import {
   shipCellsClamped,
 } from './engine/board';
 import { isArrowKey, moveCursor } from './engine/cursor';
-import { Game, Phase, ShotEvent, lastShotBy } from './engine/game';
+import { Game, Phase, ShotEvent, Winner, lastShotBy } from './engine/game';
+import {
+  GameStats,
+  PlayerRecord,
+  SideStats,
+  computeStats,
+  formatRecord,
+  formatStats,
+  parseRecord,
+  updateRecord,
+} from './engine/stats';
 import { AiPace, DEFAULT_PACE, aiDelayMs, isAiPace } from './engine/pace';
 import { Board, FLEET, Orientation, SIZE, colOf, rowOf } from './engine/types';
 
@@ -55,7 +65,10 @@ const newGameBtn = $<HTMLButtonElement>('new-game');
 const overlay = $('overlay');
 const overlayTitle = $('overlay-title');
 const overlayText = $('overlay-text');
+const overlayStats = $('overlay-stats');
+const overlayRecord = $('overlay-record');
 const overlayNew = $<HTMLButtonElement>('overlay-new');
+const overlayInspect = $<HTMLButtonElement>('overlay-inspect');
 const paceSelect = $<HTMLSelectElement>('ai-pace');
 const dialog = overlay.querySelector<HTMLElement>('.dialog')!;
 const background = [
@@ -64,7 +77,43 @@ const background = [
   $('controls'),
 ];
 
+const RECORD_KEY = 'battleship.record';
+
+/** Finished games not yet written to storage; replayed onto a fresh read on the next attempt. */
+const pending: { winner: Winner; shots: number }[] = [];
+
+/** Latest persisted record, or null when storage cannot be read. */
+function loadRecord(): PlayerRecord | null {
+  try {
+    return parseRecord(localStorage.getItem(RECORD_KEY));
+  } catch {
+    return null;
+  }
+}
+
+/** Layers every pending result onto the freshly stored record and tries to persist it. */
+function commitRecord(): PlayerRecord {
+  const base = loadRecord() ?? baseline;
+  const rec = pending.reduce((r, p) => updateRecord(r, p.winner, p.shots), base);
+  try {
+    localStorage.setItem(RECORD_KEY, JSON.stringify(rec));
+    pending.length = 0;
+    baseline = rec;
+  } catch {
+    /* storage unavailable: keep pending for the next attempt */
+  }
+  return rec;
+}
+
+/** Last record known to be in storage. */
+let baseline = loadRecord() ?? parseRecord(null);
+/** Record shown to the player (baseline plus any pending results). */
+let record = baseline;
 let game = new Game();
+/** Set once the finished game has been added to the persisted record. */
+let recorded = false;
+/** True while the player studies the revealed boards after dismissing the overlay. */
+let inspecting = false;
 let orientation: Orientation = 'h';
 let aiPace: AiPace = loadPace();
 paceSelect.value = aiPace;
@@ -216,8 +265,11 @@ function statusText(): string {
       const last = lastShotText();
       return last ? `${last} Enemy is thinking` : 'Enemy is thinking';
     }
-    case 'game-over':
-      return game.winner === 'player' ? 'Victory! Enemy fleet destroyed.' : 'Defeat. Your fleet was sunk.';
+    case 'game-over': {
+      const outcome =
+        game.winner === 'player' ? 'Victory! Enemy fleet destroyed.' : 'Defeat. Your fleet was sunk.';
+      return inspecting ? `${outcome} ${formatStats(computeStats(game.log, game.player))}` : outcome;
+    }
   }
 }
 
@@ -333,7 +385,18 @@ function fireAt(i: number): void {
 
 function afterPlayerShot(phase: Phase, wait: number): void {
   if (phase === 'ai-turn') scheduleAi(wait);
-  else if (phase === 'game-over') sinkTimers.push(setTimeout(showGameOver, wait));
+  else if (phase === 'game-over') finishGame(wait);
+}
+
+/** Records the result as soon as the game ends, then reveals the overlay after the sink animation. */
+function finishGame(wait: number): void {
+  if (!recorded) {
+    recorded = true;
+    const shots = computeStats(game.log, game.player).player.shots;
+    pending.push({ winner: game.winner, shots });
+    record = commitRecord();
+  }
+  sinkTimers.push(setTimeout(showGameOver, wait));
 }
 
 /** Fires the AI shot after the pace delay, but never before `minDelay` (e.g. a running sink animation). */
@@ -343,20 +406,39 @@ function scheduleAi(minDelay = 0): void {
     const ev = game.aiFire();
     const wait = animateSink(game.player, ev);
     render();
-    if (game.phase === 'game-over') sinkTimers.push(setTimeout(showGameOver, wait));
+    if (game.phase === 'game-over') finishGame(wait);
   }, Math.max(minDelay, aiDelayMs(aiPace)));
 }
 
 function showGameOver(): void {
   const won = game.winner === 'player';
   overlayTitle.textContent = won ? 'Victory!' : 'Defeat';
-  const shots = game.log.filter((e) => e.by === 'player').length;
+  const stats = computeStats(game.log, game.player);
   overlayText.textContent = won
-    ? `You destroyed the enemy fleet in ${shots} shots.`
+    ? `You destroyed the enemy fleet in ${stats.player.shots} shots.`
     : 'The enemy sank your entire fleet.';
+  renderStats(stats);
+  overlayRecord.textContent = formatRecord(record);
   overlay.hidden = false;
   for (const el of background) el.inert = true;
   overlayNew.focus();
+}
+
+function renderStats(s: GameStats): void {
+  const side = (x: SideStats): string => `${x.shots} shots · ${x.hits} hits · ${x.accuracy}%`;
+  const rows: [string, string][] = [
+    ['You', side(s.player)],
+    ['Enemy', side(s.enemy)],
+    ['Your ships left', String(s.shipsRemaining)],
+  ];
+  overlayStats.innerHTML = '';
+  for (const [k, v] of rows) {
+    const dt = document.createElement('dt');
+    dt.textContent = k;
+    const dd = document.createElement('dd');
+    dd.textContent = v;
+    overlayStats.append(dt, dd);
+  }
 }
 
 const FOCUSABLE =
@@ -385,11 +467,18 @@ function trapFocus(e: KeyboardEvent): void {
   }
 }
 
-function hideGameOver(): void {
+function hideGameOver(focusTarget: HTMLElement = rotateBtn): void {
   if (overlay.hidden) return;
   overlay.hidden = true;
   for (const el of background) el.inert = false;
-  rotateBtn.focus();
+  focusTarget.focus();
+}
+
+function inspectBattlefield(): void {
+  if (game.phase !== 'game-over') return;
+  inspecting = true;
+  render();
+  hideGameOver(newGameBtn);
 }
 
 function toggleOrientation(): void {
@@ -404,11 +493,14 @@ function newGame(): void {
   sinkTimers = [];
   sinking.clear();
   game = new Game();
+  recorded = false;
+  inspecting = false;
   hoverCell = null;
   cursor.set(playerBoardEl, 0);
   cursor.set(enemyBoardEl, 0);
   render();
-  hideGameOver();
+  if (overlay.hidden) rotateBtn.focus();
+  else hideGameOver();
 }
 
 rotateBtn.addEventListener('click', toggleOrientation);
@@ -432,6 +524,7 @@ paceSelect.addEventListener('change', () => {
   savePace(aiPace);
 });
 overlayNew.addEventListener('click', newGame);
+overlayInspect.addEventListener('click', inspectBattlefield);
 overlay.addEventListener('keydown', trapFocus);
 document.addEventListener('pointerdown', () => {
   pointerInput = true;

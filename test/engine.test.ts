@@ -12,6 +12,15 @@ import {
 } from '../src/engine/board';
 import { isArrowKey, moveCursor } from '../src/engine/cursor';
 import { Game, ShotEvent, lastShotBy } from '../src/engine/game';
+import {
+  EMPTY_RECORD,
+  accuracy,
+  computeStats,
+  formatRecord,
+  formatStats,
+  parseRecord,
+  updateRecord,
+} from '../src/engine/stats';
 import { DEFAULT_PACE, PACE_RANGES, aiDelayMs, isAiPace } from '../src/engine/pace';
 import { FLEET, SIZE, idx } from '../src/engine/types';
 
@@ -223,5 +232,67 @@ describe('ai pace', () => {
     expect(isAiPace('quick')).toBe(true);
     expect(isAiPace(null)).toBe(false);
     expect(isAiPace('fast')).toBe(false);
+  });
+});
+
+describe('stats', () => {
+  const ev = (by: 'player' | 'ai', result: 'miss' | 'hit' | 'sunk'): ShotEvent => ({
+    by,
+    cell: 0,
+    result,
+    ship: null,
+  });
+
+  it('computes shots, hits and rounded accuracy per side', () => {
+    const board = createBoard();
+    placeShip(board, FLEET[4], shipCells(0, 0, 2, 'h')!);
+    placeShip(board, FLEET[3], shipCells(2, 0, 3, 'h')!);
+    fireAt(board, 0);
+    fireAt(board, 1);
+    const log = [ev('player', 'miss'), ev('ai', 'hit'), ev('player', 'hit'), ev('player', 'sunk')];
+    const s = computeStats(log, board);
+    expect(s.player).toEqual({ shots: 3, hits: 2, accuracy: 67 });
+    expect(s.enemy).toEqual({ shots: 1, hits: 1, accuracy: 100 });
+    expect(s.shipsRemaining).toBe(1);
+  });
+
+  it('reports zero accuracy with no shots', () => {
+    expect(accuracy(0, 0)).toBe(0);
+    expect(computeStats([], createBoard()).player).toEqual({ shots: 0, hits: 0, accuracy: 0 });
+  });
+
+  it('tracks wins, losses, streaks and best win', () => {
+    let r = updateRecord(EMPTY_RECORD, 'player', 50);
+    expect(r).toEqual({ wins: 1, losses: 0, streak: 1, bestStreak: 1, bestWinShots: 50 });
+    r = updateRecord(r, 'player', 41);
+    expect(r).toEqual({ wins: 2, losses: 0, streak: 2, bestStreak: 2, bestWinShots: 41 });
+    r = updateRecord(r, 'ai', 60);
+    expect(r).toEqual({ wins: 2, losses: 1, streak: 0, bestStreak: 2, bestWinShots: 41 });
+    r = updateRecord(r, 'player', 55);
+    expect(r).toEqual({ wins: 3, losses: 1, streak: 1, bestStreak: 2, bestWinShots: 41 });
+    expect(updateRecord(r, null, 1)).toEqual(r);
+    expect(EMPTY_RECORD.wins).toBe(0);
+  });
+
+  it('round-trips through JSON and rejects malformed data', () => {
+    const r = updateRecord(EMPTY_RECORD, 'player', 41);
+    expect(parseRecord(JSON.stringify(r))).toEqual(r);
+    expect(parseRecord(null)).toEqual(EMPTY_RECORD);
+    expect(parseRecord('not json')).toEqual(EMPTY_RECORD);
+    expect(parseRecord('{"wins":-1}')).toEqual(EMPTY_RECORD);
+    expect(parseRecord('{"wins":"3","losses":0,"streak":0,"bestStreak":0,"bestWinShots":null}')).toEqual(
+      EMPTY_RECORD,
+    );
+    expect(parseRecord('[]')).toEqual(EMPTY_RECORD);
+  });
+
+  it('formats the record and stats lines', () => {
+    expect(formatRecord(EMPTY_RECORD)).toBe('Record: 0W–0L · Streak 0');
+    const r = { wins: 3, losses: 2, streak: 2, bestStreak: 2, bestWinShots: 41 };
+    expect(formatRecord(r)).toBe('Record: 3W–2L · Streak 2 · Best streak 2 · Best win 41 shots');
+    const s = computeStats([ev('player', 'hit'), ev('ai', 'miss')], createBoard());
+    expect(formatStats(s)).toBe(
+      'You: 1 shots, 1 hits (100%) · Enemy: 1 shots, 0 hits (0%) · Ships left: 0',
+    );
   });
 });

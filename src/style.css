@@ -473,8 +473,9 @@ button.primary:hover:not(:disabled) {
   z-index: 10;
   background: rgb(0 0 0 / 0.65);
   display: flex;
-  align-items: center;
+  align-items: safe center;
   justify-content: center;
+  overflow-y: auto;
 }
 
 .overlay[hidden] {
@@ -487,9 +488,41 @@ button.primary:hover:not(:disabled) {
   border-radius: 16px;
   text-align: center;
   box-shadow: 0 12px 40px rgb(0 0 0 / 0.6);
+  max-height: 100%;
+  overflow-y: auto;
 }
 
 .dialog h2 {
   font-size: 1.75rem;
   color: var(--text);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0.35rem 1.25rem;
+  margin: 1.25rem 0 0.75rem;
+  text-align: left;
+}
+
+.stats dt {
+  color: #9fb3c8;
+}
+
+.stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.record {
+  margin: 0 0 1.25rem;
+  font-size: 0.9rem;
+  color: #9fb3c8;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
 }
