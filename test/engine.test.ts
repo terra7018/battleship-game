@@ -32,6 +32,7 @@ import {
   updateRecord,
 } from '../src/engine/stats';
 import { DEFAULT_PACE, PACE_RANGES, aiDelayMs, isAiPace } from '../src/engine/pace';
+import { SOUNDS, outcomeSound, parseMuted, shotSound, soundDuration } from '../src/engine/sound';
 import { FLEET, SIZE, colOf, idx, rowOf } from '../src/engine/types';
 
 function seeded(seed: number): () => number {
@@ -422,6 +423,45 @@ describe('ai pace', () => {
     expect(isAiPace('quick')).toBe(true);
     expect(isAiPace(null)).toBe(false);
     expect(isAiPace('fast')).toBe(false);
+  });
+});
+
+describe('sound', () => {
+  const ev = (result: ShotEvent['result']): ShotEvent => ({ by: 'player', cell: 0, result, ship: null });
+
+  it('maps each shot result to its own sound', () => {
+    expect(shotSound(ev('miss'))).toBe('miss');
+    expect(shotSound(ev('hit'))).toBe('hit');
+    expect(shotSound(ev('sunk'))).toBe('sunk');
+  });
+
+  it('plays a fanfare only once the game has a winner', () => {
+    expect(outcomeSound(null)).toBeNull();
+    expect(outcomeSound('player')).toBe('victory');
+    expect(outcomeSound('ai')).toBe('defeat');
+  });
+
+  it('keeps every recipe short and well-formed', () => {
+    for (const [name, tones] of Object.entries(SOUNDS)) {
+      expect(tones.length).toBeGreaterThan(0);
+      for (const t of tones) {
+        expect(t.freq).toBeGreaterThan(0);
+        expect(t.to).toBeGreaterThan(0);
+        expect(t.duration).toBeGreaterThan(0);
+        expect(t.gain).toBeGreaterThan(0);
+        expect(t.gain).toBeLessThanOrEqual(0.5);
+      }
+      expect(soundDuration(name as keyof typeof SOUNDS)).toBeLessThanOrEqual(1.5);
+    }
+    expect(soundDuration('victory')).toBeCloseTo(0.98);
+  });
+
+  it('defaults to sound on unless explicitly muted', () => {
+    expect(parseMuted(null)).toBe(false);
+    expect(parseMuted('')).toBe(false);
+    expect(parseMuted('false')).toBe(false);
+    expect(parseMuted('garbage')).toBe(false);
+    expect(parseMuted('true')).toBe(true);
   });
 });
 
