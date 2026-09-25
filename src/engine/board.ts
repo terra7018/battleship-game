@@ -95,8 +95,12 @@ export function moveShip(board: Board, shipId: number, cells: readonly number[])
 
 /** Randomly places only the ships of `fleet` not yet on the board, keeping existing ones. */
 export function randomFleetRemaining(board: Board, rng: Rng = Math.random, fleet = FLEET): void {
-  const placed = new Set(board.ships.map((s) => s.name));
-  randomFleet(board, rng, fleet.filter((spec) => !placed.has(spec.name)));
+  const remaining = [...fleet];
+  for (const ship of board.ships) {
+    const k = remaining.findIndex((s) => s.name === ship.name && s.length === ship.length);
+    if (k !== -1) remaining.splice(k, 1);
+  }
+  randomFleet(board, rng, remaining);
 }
 
 export function randomFleet(board: Board, rng: Rng = Math.random, fleet = FLEET): void {

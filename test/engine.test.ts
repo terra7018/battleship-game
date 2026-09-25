@@ -115,6 +115,18 @@ describe('placement', () => {
     expect(b.ships.map((s) => s.name).sort()).toEqual(FLEET.map((s) => s.name).sort());
   });
 
+  it('randomFleetRemaining consumes one fleet entry per placed ship for duplicate names', () => {
+    const b = createBoard();
+    const fleet = [
+      { name: 'Patrol', length: 2 },
+      { name: 'Patrol', length: 2 },
+    ];
+    placeShip(b, fleet[0], shipCells(0, 0, 2, 'h')!);
+    randomFleetRemaining(b, seeded(6), fleet);
+    expect(b.ships).toHaveLength(2);
+    expect(b.ships.map((s) => s.name)).toEqual(['Patrol', 'Patrol']);
+  });
+
   it('moves a ship, keeping its id and freeing its old cells', () => {
     const b = createBoard();
     placeShip(b, FLEET[0], shipCells(0, 0, 5, 'h')!);
