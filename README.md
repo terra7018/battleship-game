@@ -12,7 +12,7 @@ npm run dev      # http://localhost:5173
 ```
 
 1. **Place your fleet** — hover a cell on *Your Fleet* to preview, click to place. `R` (or the Rotate button) flips orientation. *Randomize* places everything for you; *Undo* removes the last ship.
-2. **Start Battle**, then click cells in *Enemy Waters* to fire. The AI answers after a short pause.
+2. **Start Battle**, then click cells in *Enemy Waters* to fire. The AI "thinks" for a random 3–10 seconds before answering, like a human opponent.
 3. First to sink all five ships wins. Enemy ships are revealed when the game ends.
 
 Fleet: Carrier (5), Battleship (4), Cruiser (3), Submarine (3), Destroyer (2) on a 10x10 grid.
