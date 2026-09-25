@@ -20,6 +20,8 @@ import {
   updateRecord,
 } from './engine/stats';
 import { AiPace, DEFAULT_PACE, aiDelayMs, isAiPace } from './engine/pace';
+import { outcomeSound, parseMuted, shotSound } from './engine/sound';
+import { Sfx } from './audio';
 import { Board, FLEET, Orientation, SIZE, colOf, rowOf } from './engine/types';
 
 const PACE_KEY = 'battleship.aiPace';
@@ -41,6 +43,25 @@ function savePace(pace: AiPace): void {
   }
 }
 
+const MUTE_KEY = 'battleship.muted';
+
+function loadMuted(): boolean {
+  try {
+    return parseMuted(localStorage.getItem(MUTE_KEY));
+  } catch {
+    return false;
+  }
+}
+
+function saveMuted(muted: boolean): void {
+  try {
+    localStorage.setItem(MUTE_KEY, String(muted));
+  } catch {
+    /* storage unavailable; keep in-memory choice */
+  }
+}
+
+const SPLASH_MS = 700;
 const SINK_STAGGER_MS = 120;
 const SINK_CELL_MS = 900;
 const sinkDurationMs = (len: number): number => SINK_CELL_MS + SINK_STAGGER_MS * (len - 1);
@@ -70,6 +91,7 @@ const overlayRecord = $('overlay-record');
 const overlayNew = $<HTMLButtonElement>('overlay-new');
 const overlayInspect = $<HTMLButtonElement>('overlay-inspect');
 const paceSelect = $<HTMLSelectElement>('ai-pace');
+const muteBtn = $<HTMLButtonElement>('mute');
 const dialog = overlay.querySelector<HTMLElement>('.dialog')!;
 const background = [
   document.querySelector<HTMLElement>('header')!,
@@ -117,6 +139,8 @@ let inspecting = false;
 let orientation: Orientation = 'h';
 let aiPace: AiPace = loadPace();
 paceSelect.value = aiPace;
+const sfx = new Sfx();
+sfx.muted = loadMuted();
 let hoverCell: number | null = null;
 /** Roving-tabindex cursor per board: the single cell that is tabbable. */
 const cursor = new Map<HTMLElement, number>([
@@ -130,6 +154,9 @@ let pointerInput = false;
 /** Cells currently playing the sink animation, mapped to their stagger order. */
 const sinking = new Map<Board, Map<number, number>>();
 let sinkTimers: ReturnType<typeof setTimeout>[] = [];
+/** Cell per board currently playing the miss-splash / hit-impact animation. */
+const splashing = new Map<Board, number>();
+let splashTimers: ReturnType<typeof setTimeout>[] = [];
 
 function buildBoard(el: HTMLElement): void {
   el.innerHTML = '';
@@ -192,6 +219,7 @@ function renderBoard(el: HTMLElement, board: Board, revealShips: boolean, tabbab
     if (shot === 'miss') cell.classList.add('miss');
     if (sunk) cell.classList.add('sunk');
     if (i === lastShot) cell.classList.add('last-shot');
+    if (splashing.get(board) === i) cell.classList.add(shot === 'miss' ? 'splash' : 'impact');
     const order = sinking.get(board)?.get(i);
     if (order !== undefined) {
       cell.classList.add('sinking');
@@ -251,6 +279,11 @@ function render(): void {
   turnEl.hidden = !battle;
   turnEl.textContent = game.phase === 'player-turn' ? 'Your turn' : 'Enemy turn';
   turnEl.classList.toggle('enemy', game.phase === 'ai-turn');
+
+  muteBtn.setAttribute('aria-pressed', String(sfx.muted));
+  muteBtn.setAttribute('aria-label', sfx.muted ? 'Unmute sound' : 'Mute sound');
+  muteBtn.title = sfx.muted ? 'Unmute sound' : 'Mute sound';
+  muteBtn.textContent = sfx.muted ? '\u{1F507}' : '\u{1F50A}';
 }
 
 function statusText(): string {
@@ -301,6 +334,19 @@ function animateSink(board: Board, ev: ShotEvent): number {
     }, duration),
   );
   return duration;
+}
+
+/** Plays the shot sound and, unless the ship sank (the sink animation takes over), the splash/impact animation. */
+function animateShot(board: Board, ev: ShotEvent): void {
+  sfx.play(shotSound(ev));
+  if (ev.result === 'sunk') return;
+  splashing.set(board, ev.cell);
+  splashTimers.push(
+    setTimeout(() => {
+      if (splashing.get(board) === ev.cell) splashing.delete(board);
+      render();
+    }, SPLASH_MS),
+  );
 }
 
 function cellFromEvent(e: Event): number | null {
@@ -378,6 +424,7 @@ function placeAt(i: number): void {
 function fireAt(i: number): void {
   if (game.phase !== 'player-turn' || game.enemy.shots[i] !== undefined) return;
   const ev = game.playerFire(i);
+  animateShot(game.enemy, ev);
   const wait = animateSink(game.enemy, ev);
   render();
   afterPlayerShot(game.phase, wait);
@@ -404,6 +451,7 @@ function scheduleAi(minDelay = 0): void {
   aiTimer = setTimeout(() => {
     aiTimer = null;
     const ev = game.aiFire();
+    animateShot(game.player, ev);
     const wait = animateSink(game.player, ev);
     render();
     if (game.phase === 'game-over') finishGame(wait);
@@ -422,6 +470,8 @@ function showGameOver(): void {
   overlay.hidden = false;
   for (const el of background) el.inert = true;
   overlayNew.focus();
+  const fanfare = outcomeSound(game.winner);
+  if (fanfare) sfx.play(fanfare);
 }
 
 function renderStats(s: GameStats): void {
@@ -492,6 +542,9 @@ function newGame(): void {
   sinkTimers.forEach(clearTimeout);
   sinkTimers = [];
   sinking.clear();
+  splashTimers.forEach(clearTimeout);
+  splashTimers = [];
+  splashing.clear();
   game = new Game();
   recorded = false;
   inspecting = false;
@@ -522,6 +575,11 @@ paceSelect.addEventListener('change', () => {
   aiPace = isAiPace(paceSelect.value) ? paceSelect.value : DEFAULT_PACE;
   paceSelect.value = aiPace;
   savePace(aiPace);
+});
+muteBtn.addEventListener('click', () => {
+  sfx.muted = !sfx.muted;
+  saveMuted(sfx.muted);
+  render();
 });
 overlayNew.addEventListener('click', newGame);
 overlayInspect.addEventListener('click', inspectBattlefield);

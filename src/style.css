@@ -294,6 +294,67 @@ body:not(.pointer-input) .board.interactive .cell:not(.hit):not(.miss):not(.prev
   }
 }
 
+.cell.splash,
+.cell.impact {
+  position: relative;
+}
+
+.cell.splash::before,
+.cell.impact::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.cell.splash::before {
+  border: 2px solid var(--miss);
+  animation: splash-ring 0.7s ease-out both;
+}
+
+.cell.impact {
+  animation: impact-flash 0.5s ease-out both;
+}
+
+.cell.impact::before {
+  background: #ffd166;
+  animation: impact-burst 0.5s ease-out both;
+}
+
+@keyframes splash-ring {
+  0% {
+    transform: scale(0.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+@keyframes impact-flash {
+  0% {
+    background: #fff3c4;
+    transform: scale(1.2);
+  }
+  100% {
+    background: var(--hit);
+    transform: scale(1);
+  }
+}
+
+@keyframes impact-burst {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
 .cell.sinking {
   position: relative;
   z-index: 1;
@@ -385,11 +446,14 @@ body:not(.pointer-input) .board.interactive .cell:not(.hit):not(.miss):not(.prev
 
 @media (prefers-reduced-motion: reduce) {
   .cell.sinking,
+  .cell.impact,
   .fleet li.sinking {
     animation: none;
   }
 
-  .cell.sinking::before {
+  .cell.sinking::before,
+  .cell.splash::before,
+  .cell.impact::before {
     display: none;
   }
 }
@@ -410,6 +474,29 @@ button {
   background: var(--panel);
   color: var(--text);
   cursor: pointer;
+}
+
+.settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.mute {
+  padding: 0.3rem 0.6rem;
+  line-height: 1;
+  font-size: 1rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.mute[aria-pressed='true'] {
+  opacity: 0.6;
+}
+
+.mute:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .setting {
@@ -441,8 +528,12 @@ button {
 }
 
 @media (max-width: 700px) {
-  .setting {
+  .setting,
+  .mute {
     margin: 0 0 0.25rem;
+  }
+
+  .setting {
     font-size: 0.75rem;
   }
 }
