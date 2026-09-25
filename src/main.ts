@@ -215,7 +215,9 @@ playerBoardEl.addEventListener('mousemove', (e) => {
   }
 });
 playerBoardEl.addEventListener('mouseleave', () => {
-  hoverCell = playerBoardEl.contains(document.activeElement) ? cursor.get(playerBoardEl)! : null;
+  const focused = document.activeElement;
+  const byKeyboard = focused?.matches('#player-board .cell:focus-visible') ?? false;
+  hoverCell = byKeyboard ? cursor.get(playerBoardEl)! : null;
   render();
 });
 playerBoardEl.addEventListener('focusin', () => {
