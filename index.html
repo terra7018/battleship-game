@@ -9,7 +9,10 @@
   <body>
     <header>
       <h1>Battleship</h1>
-      <p id="status" class="status" aria-live="polite"></p>
+      <p class="status-row">
+        <span id="turn" class="turn" hidden></span>
+        <span id="status" class="status" aria-live="polite"></span>
+      </p>
       <label class="setting" for="ai-pace">
         AI pace
         <select id="ai-pace">
@@ -22,13 +25,17 @@
     <main>
       <section class="board-wrap">
         <h2>Your Fleet</h2>
-        <div id="player-board" class="board" role="grid" aria-label="Your fleet"></div>
+        <div class="board-frame">
+          <div id="player-board" class="board" role="grid" aria-label="Your fleet"></div>
+        </div>
         <ul id="player-fleet" class="fleet"></ul>
       </section>
 
       <section class="board-wrap">
         <h2>Enemy Waters</h2>
-        <div id="enemy-board" class="board enemy" role="grid" aria-label="Enemy waters"></div>
+        <div class="board-frame">
+          <div id="enemy-board" class="board enemy" role="grid" aria-label="Enemy waters"></div>
+        </div>
         <ul id="enemy-fleet" class="fleet"></ul>
       </section>
     </main>

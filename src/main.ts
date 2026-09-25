@@ -8,7 +8,7 @@ import {
   shipCellsClamped,
 } from './engine/board';
 import { isArrowKey, moveCursor } from './engine/cursor';
-import { Game, Phase, ShotEvent } from './engine/game';
+import { Game, Phase, ShotEvent, lastShotBy } from './engine/game';
 import { AiPace, DEFAULT_PACE, aiDelayMs, isAiPace } from './engine/pace';
 import { Board, FLEET, Orientation, SIZE, colOf, rowOf } from './engine/types';
 
@@ -46,6 +46,7 @@ const enemyBoardEl = $('enemy-board');
 const playerFleetEl = $('player-fleet');
 const enemyFleetEl = $('enemy-fleet');
 const statusEl = $('status');
+const turnEl = $('turn');
 const rotateBtn = $<HTMLButtonElement>('rotate');
 const randomBtn = $<HTMLButtonElement>('random');
 const undoBtn = $<HTMLButtonElement>('undo');
@@ -91,6 +92,24 @@ function buildBoard(el: HTMLElement): void {
     cell.setAttribute('aria-label', label(i));
     el.appendChild(cell);
   }
+  buildLabels(el);
+}
+
+function buildLabels(board: HTMLElement): void {
+  const frame = board.parentElement!;
+  const make = (cls: string, text: (k: number) => string) => {
+    const list = document.createElement('div');
+    list.className = cls;
+    list.setAttribute('aria-hidden', 'true');
+    for (let k = 0; k < SIZE; k++) {
+      const span = document.createElement('span');
+      span.textContent = text(k);
+      list.appendChild(span);
+    }
+    frame.insertBefore(list, board);
+  };
+  make('col-labels', (k) => String(k + 1));
+  make('row-labels', (k) => String.fromCharCode(65 + k));
 }
 
 const label = (i: number): string => `${String.fromCharCode(65 + rowOf(i))}${colOf(i) + 1}`;
@@ -111,6 +130,7 @@ function renderBoard(el: HTMLElement, board: Board, revealShips: boolean, tabbab
   const preview = el === playerBoardEl ? previewCells() : null;
   const cells = el.children;
   const focusable = tabbable ? cursor.get(el) : undefined;
+  const lastShot = lastShotBy(game.log, el === enemyBoardEl ? 'player' : 'ai')?.cell;
   for (let i = 0; i < cells.length; i++) {
     const cell = cells[i] as HTMLElement;
     if (i === focusable) cell.tabIndex = 0;
@@ -122,6 +142,7 @@ function renderBoard(el: HTMLElement, board: Board, revealShips: boolean, tabbab
     if (shot === 'hit') cell.classList.add('hit');
     if (shot === 'miss') cell.classList.add('miss');
     if (sunk) cell.classList.add('sunk');
+    if (i === lastShot) cell.classList.add('last-shot');
     const order = sinking.get(board)?.get(i);
     if (order !== undefined) {
       cell.classList.add('sinking');
@@ -178,6 +199,9 @@ function render(): void {
 
   statusEl.textContent = statusText();
   statusEl.classList.toggle('thinking', game.phase === 'ai-turn');
+  turnEl.hidden = !battle;
+  turnEl.textContent = game.phase === 'player-turn' ? 'Your turn' : 'Enemy turn';
+  turnEl.classList.toggle('enemy', game.phase === 'ai-turn');
 }
 
 function statusText(): string {
