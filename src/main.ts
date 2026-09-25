@@ -8,7 +8,7 @@ import {
   shipCellsClamped,
 } from './engine/board';
 import { isArrowKey, moveCursor } from './engine/cursor';
-import { Game, Phase, ShotEvent, lastShotBy } from './engine/game';
+import { Game, Phase, ShotEvent, Winner, lastShotBy } from './engine/game';
 import {
   GameStats,
   PlayerRecord,
@@ -79,8 +79,8 @@ const background = [
 
 const RECORD_KEY = 'battleship.record';
 
-/** True while the in-memory record holds results that could not be written to storage. */
-let unsaved = false;
+/** Finished games not yet written to storage; replayed onto a fresh read on the next attempt. */
+const pending: { winner: Winner; shots: number }[] = [];
 
 /** Latest persisted record, or null when storage cannot be read. */
 function loadRecord(): PlayerRecord | null {
@@ -91,16 +91,24 @@ function loadRecord(): PlayerRecord | null {
   }
 }
 
-function saveRecord(rec: PlayerRecord): void {
+/** Layers every pending result onto the freshly stored record and tries to persist it. */
+function commitRecord(): PlayerRecord {
+  const base = loadRecord() ?? baseline;
+  const rec = pending.reduce((r, p) => updateRecord(r, p.winner, p.shots), base);
   try {
     localStorage.setItem(RECORD_KEY, JSON.stringify(rec));
-    unsaved = false;
+    pending.length = 0;
+    baseline = rec;
   } catch {
-    unsaved = true;
+    /* storage unavailable: keep pending for the next attempt */
   }
+  return rec;
 }
 
-let record = loadRecord() ?? parseRecord(null);
+/** Last record known to be in storage. */
+let baseline = loadRecord() ?? parseRecord(null);
+/** Record shown to the player (baseline plus any pending results). */
+let record = baseline;
 let game = new Game();
 /** Set once the finished game has been added to the persisted record. */
 let recorded = false;
@@ -385,9 +393,8 @@ function finishGame(wait: number): void {
   if (!recorded) {
     recorded = true;
     const shots = computeStats(game.log, game.player).player.shots;
-    const base = unsaved ? record : (loadRecord() ?? record);
-    record = updateRecord(base, game.winner, shots);
-    saveRecord(record);
+    pending.push({ winner: game.winner, shots });
+    record = commitRecord();
   }
   sinkTimers.push(setTimeout(showGameOver, wait));
 }
