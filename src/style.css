@@ -85,6 +85,28 @@ h2 {
   }
 }
 
+@media (max-width: 700px) {
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    width: calc(100% + 2rem);
+    margin: -1rem -1rem 0;
+    padding: 0.5rem 1rem;
+    background: var(--bg);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.5);
+  }
+
+  h1 {
+    font-size: 1.1rem;
+    margin: 0;
+  }
+
+  .status {
+    margin: 0.25rem 0 0.25rem;
+  }
+}
+
 main {
   display: flex;
   flex-wrap: wrap;
@@ -307,6 +329,7 @@ button.primary:hover:not(:disabled) {
 .overlay {
   position: fixed;
   inset: 0;
+  z-index: 10;
   background: rgb(0 0 0 / 0.65);
   display: flex;
   align-items: center;
