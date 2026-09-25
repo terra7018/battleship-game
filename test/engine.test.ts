@@ -109,6 +109,21 @@ describe('AI', () => {
     expect(total / runs).toBeLessThan(70);
   });
 
+  it('keeps targeting when adjacent hits belong to two side-by-side vertical ships', () => {
+    const b = createBoard();
+    placeShip(b, FLEET[2], shipCells(4, 4, 3, 'v')!); // (4..6, 4)
+    placeShip(b, FLEET[3], shipCells(4, 5, 3, 'v')!); // (4..6, 5)
+    const ai = new HuntTargetAi(seeded(5));
+    const shoot = (cell: number) => ai.notify(b, cell, fireAt(b, cell).result);
+    shoot(idx(5, 4));
+    shoot(idx(5, 5));
+    // both horizontal extensions miss
+    shoot(idx(5, 3));
+    shoot(idx(5, 6));
+    const next = ai.chooseTarget(b);
+    expect([idx(4, 4), idx(6, 4), idx(4, 5), idx(6, 5)]).toContain(next);
+  });
+
   it('follows up on a hit with an adjacent cell', () => {
     const b = createBoard();
     placeShip(b, FLEET[0], shipCells(5, 2, 5, 'h')!);

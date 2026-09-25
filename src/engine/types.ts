@@ -16,7 +16,7 @@ export const FLEET: readonly ShipSpec[] = [
 ];
 
 export interface Ship extends ShipSpec {
-  readonly id: number;
+  id: number;
   readonly cells: readonly number[];
   hits: number;
 }
