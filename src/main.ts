@@ -118,6 +118,7 @@ function render(): void {
   rotateBtn.textContent = `Rotate (R): ${orientation === 'h' ? 'Horizontal' : 'Vertical'}`;
 
   statusEl.textContent = statusText();
+  statusEl.classList.toggle('thinking', game.phase === 'ai-turn');
 }
 
 function statusText(): string {
@@ -128,8 +129,10 @@ function statusText(): string {
         : `Place your ${game.nextShip.name} (${game.nextShip.length} cells)`;
     case 'player-turn':
       return lastShotText() || 'Your turn — fire at Enemy Waters';
-    case 'ai-turn':
-      return 'Enemy is thinking…';
+    case 'ai-turn': {
+      const last = lastShotText();
+      return last ? `${last} Enemy is thinking` : 'Enemy is thinking';
+    }
     case 'game-over':
       return game.winner === 'player' ? 'Victory! Enemy fleet destroyed.' : 'Defeat. Your fleet was sunk.';
   }

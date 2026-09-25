@@ -55,6 +55,36 @@ h2 {
   font-weight: 600;
 }
 
+.status.thinking::after {
+  content: '';
+  display: inline-block;
+  width: 1.5em;
+  text-align: left;
+  animation: thinking-dots 1.2s steps(4, end) infinite;
+}
+
+@keyframes thinking-dots {
+  0% {
+    content: '';
+  }
+  25% {
+    content: '.';
+  }
+  50% {
+    content: '..';
+  }
+  75% {
+    content: '...';
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status.thinking::after {
+    content: '…';
+    animation: none;
+  }
+}
+
 main {
   display: flex;
   flex-wrap: wrap;
