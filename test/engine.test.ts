@@ -11,7 +11,7 @@ import {
   shipCells,
 } from '../src/engine/board';
 import { isArrowKey, moveCursor } from '../src/engine/cursor';
-import { Game, ShotEvent } from '../src/engine/game';
+import { Game, ShotEvent, lastShotBy } from '../src/engine/game';
 import {
   EMPTY_RECORD,
   accuracy,
@@ -170,6 +170,15 @@ describe('Game flow', () => {
     expect(() => g.aiFire()).toThrow();
     g.playerFire(0);
     expect(() => g.playerFire(1)).toThrow();
+  });
+
+  it('finds the latest shot per side', () => {
+    const ev = (by: ShotEvent['by'], cell: number): ShotEvent => ({ by, cell, result: 'miss', ship: null });
+    expect(lastShotBy([], 'player')).toBeNull();
+    const log = [ev('player', 3), ev('ai', 7), ev('player', 12)];
+    expect(lastShotBy(log, 'player')?.cell).toBe(12);
+    expect(lastShotBy(log, 'ai')?.cell).toBe(7);
+    expect(lastShotBy([ev('player', 3)], 'ai')).toBeNull();
   });
 });
 
