@@ -76,6 +76,27 @@ export function removeShip(board: Board, shipId: number): void {
   });
 }
 
+/** True if `shipId` could occupy `cells` (its own current cells count as free). */
+export function canMove(board: Board, shipId: number, cells: readonly number[] | null): boolean {
+  if (!cells || !board.ships[shipId]) return false;
+  return cells.every((i) => board.occupancy[i] === -1 || board.occupancy[i] === shipId);
+}
+
+/** Relocates an existing ship, keeping its id and fleet order. Returns false if blocked. */
+export function moveShip(board: Board, shipId: number, cells: readonly number[]): boolean {
+  const ship = board.ships[shipId];
+  if (!canMove(board, shipId, cells)) return false;
+  for (const i of ship.cells) board.occupancy[i] = -1;
+  for (const i of cells) board.occupancy[i] = shipId;
+  board.ships[shipId] = { ...ship, cells: [...cells] };
+  return true;
+}
+
+/** Randomly places only the ships of `fleet` not yet on the board, keeping existing ones. */
+export function randomFleetRemaining(board: Board, rng: Rng = Math.random, fleet = FLEET): void {
+  randomFleet(board, rng, fleet.slice(board.ships.length));
+}
+
 export function randomFleet(board: Board, rng: Rng = Math.random, fleet = FLEET): void {
   for (const spec of fleet) {
     for (let attempt = 0; ; attempt++) {
