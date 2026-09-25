@@ -7,6 +7,7 @@ import {
   shipCells,
   shipCellsClamped,
 } from './engine/board';
+import { isArrowKey, moveCursor } from './engine/cursor';
 import { Game, Phase, ShotEvent } from './engine/game';
 import { Board, FLEET, Orientation, SIZE, colOf, rowOf } from './engine/types';
 
@@ -44,6 +45,11 @@ const overlayNew = $<HTMLButtonElement>('overlay-new');
 let game = new Game();
 let orientation: Orientation = 'h';
 let hoverCell: number | null = null;
+/** Roving-tabindex cursor per board: the single cell that is tabbable. */
+const cursor = new Map<HTMLElement, number>([
+  [playerBoardEl, 0],
+  [enemyBoardEl, 0],
+]);
 let aiTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Cells currently playing the sink animation, mapped to their stagger order. */
@@ -76,11 +82,14 @@ function previewCells(): { cells: number[]; ok: boolean } | null {
   };
 }
 
-function renderBoard(el: HTMLElement, board: Board, revealShips: boolean): void {
+function renderBoard(el: HTMLElement, board: Board, revealShips: boolean, tabbable: boolean): void {
   const preview = el === playerBoardEl ? previewCells() : null;
   const cells = el.children;
+  const focusable = tabbable ? cursor.get(el) : undefined;
   for (let i = 0; i < cells.length; i++) {
     const cell = cells[i] as HTMLElement;
+    if (i === focusable) cell.tabIndex = 0;
+    else cell.removeAttribute('tabindex');
     const shipId = board.occupancy[i];
     const shot = board.shots[i];
     const sunk = shipId !== -1 && isSunk(board.ships[shipId]);
@@ -127,8 +136,9 @@ function renderFleet(el: HTMLElement, board: Board, showPending: boolean): void 
 function render(): void {
   const placing = game.phase === 'placement';
   const revealEnemy = game.phase === 'game-over';
-  renderBoard(playerBoardEl, game.player, true);
-  renderBoard(enemyBoardEl, game.enemy, revealEnemy);
+  const battle = game.phase === 'player-turn' || game.phase === 'ai-turn';
+  renderBoard(playerBoardEl, game.player, true, placing);
+  renderBoard(enemyBoardEl, game.enemy, revealEnemy, battle);
   renderFleet(playerFleetEl, game.player, placing);
   renderFleet(enemyFleetEl, game.enemy, false);
 
@@ -205,29 +215,71 @@ playerBoardEl.addEventListener('mousemove', (e) => {
   }
 });
 playerBoardEl.addEventListener('mouseleave', () => {
+  hoverCell = playerBoardEl.contains(document.activeElement) ? cursor.get(playerBoardEl)! : null;
+  render();
+});
+playerBoardEl.addEventListener('focusin', () => {
+  hoverCell = cursor.get(playerBoardEl)!;
+  render();
+});
+playerBoardEl.addEventListener('focusout', (e) => {
+  if (playerBoardEl.contains(e.relatedTarget as Node | null)) return;
   hoverCell = null;
   render();
 });
 playerBoardEl.addEventListener('click', (e) => {
-  if (game.phase !== 'placement' || game.fleetComplete) return;
   const i = cellFromEvent(e);
   if (i === null) return;
-  const cells = shipCells(rowOf(i), colOf(i), game.nextShip.length, orientation);
-  if (canPlace(game.player, cells)) {
-    placeShip(game.player, game.nextShip, cells!);
-    render();
-  }
+  setCursor(playerBoardEl, i, true);
+  placeAt(i);
 });
 
 enemyBoardEl.addEventListener('click', (e) => {
-  if (game.phase !== 'player-turn') return;
   const i = cellFromEvent(e);
-  if (i === null || game.enemy.shots[i] !== undefined) return;
+  if (i === null) return;
+  setCursor(enemyBoardEl, i, true);
+  fireAt(i);
+});
+
+for (const el of [playerBoardEl, enemyBoardEl]) {
+  el.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const i = cursor.get(el)!;
+    if (isArrowKey(e.key)) {
+      e.preventDefault();
+      const next = moveCursor(i, e.key);
+      if (el === playerBoardEl) hoverCell = next;
+      setCursor(el, next, true);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (el === playerBoardEl) placeAt(i);
+      else fireAt(i);
+    }
+  });
+}
+
+function setCursor(el: HTMLElement, i: number, focus: boolean): void {
+  cursor.set(el, i);
+  render();
+  if (focus) (el.children[i] as HTMLElement).focus();
+}
+
+function placeAt(i: number): void {
+  if (game.phase !== 'placement' || game.fleetComplete) return;
+  const cells = shipCells(rowOf(i), colOf(i), game.nextShip.length, orientation);
+  if (!canPlace(game.player, cells)) return;
+  placeShip(game.player, game.nextShip, cells!);
+  render();
+  if (game.fleetComplete && playerBoardEl.contains(document.activeElement)) startBtn.focus();
+}
+
+function fireAt(i: number): void {
+  if (game.phase !== 'player-turn' || game.enemy.shots[i] !== undefined) return;
   const ev = game.playerFire(i);
   const wait = animateSink(game.enemy, ev);
   render();
   afterPlayerShot(game.phase, wait);
-});
+}
 
 function afterPlayerShot(phase: Phase, wait: number): void {
   if (phase === 'ai-turn') scheduleAi();
@@ -267,6 +319,8 @@ function newGame(): void {
   sinking.clear();
   game = new Game();
   hoverCell = null;
+  cursor.set(playerBoardEl, 0);
+  cursor.set(enemyBoardEl, 0);
   overlay.hidden = true;
   render();
 }
@@ -283,7 +337,7 @@ undoBtn.addEventListener('click', () => {
 });
 startBtn.addEventListener('click', () => {
   game.start();
-  render();
+  setCursor(enemyBoardEl, cursor.get(enemyBoardEl)!, true);
 });
 newGameBtn.addEventListener('click', newGame);
 overlayNew.addEventListener('click', newGame);
