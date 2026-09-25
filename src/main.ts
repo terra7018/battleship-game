@@ -195,6 +195,7 @@ function previewCells(): { cells: number[]; ok: boolean } | null {
 function dragCells(): { cells: number[]; ok: boolean } | null {
   if (!drag || drag.over === null) return null;
   const ship = game.player.ships[drag.shipId];
+  if (!ship) return null;
   const r = rowOf(drag.over) - (drag.orientation === 'v' ? drag.offset : 0);
   const c = colOf(drag.over) - (drag.orientation === 'h' ? drag.offset : 0);
   const exact = shipCells(r, c, ship.length, drag.orientation);
@@ -406,7 +407,7 @@ let suppressClick = false;
 function endDrag(commit: boolean): void {
   if (!drag) return;
   const { shipId, pointerId } = drag;
-  const target = commit ? dragCells() : null;
+  const target = commit && game.phase === 'placement' ? dragCells() : null;
   if (target?.ok) moveShip(game.player, shipId, target.cells);
   if (playerBoardEl.hasPointerCapture(pointerId)) playerBoardEl.releasePointerCapture(pointerId);
   suppressClick = drag.moved;
@@ -603,19 +604,23 @@ function newGame(): void {
 
 rotateBtn.addEventListener('click', toggleOrientation);
 randomBtn.addEventListener('click', () => {
+  endDrag(false);
   while (game.player.ships.length) removeShip(game.player, game.player.ships.length - 1);
   randomFleet(game.player);
   render();
 });
 randomRemainingBtn.addEventListener('click', () => {
+  endDrag(false);
   randomFleetRemaining(game.player);
   render();
 });
 undoBtn.addEventListener('click', () => {
+  endDrag(false);
   removeShip(game.player, game.player.ships.length - 1);
   render();
 });
 startBtn.addEventListener('click', () => {
+  endDrag(false);
   game.start();
   setCursor(enemyBoardEl, cursor.get(enemyBoardEl)!, true);
 });
