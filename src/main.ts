@@ -79,26 +79,24 @@ const background = [
 
 const RECORD_KEY = 'battleship.record';
 
-/** False once localStorage has failed; the record is then kept in memory only. */
-let storageOk = true;
+/** True while the in-memory record holds results that could not be written to storage. */
+let unsaved = false;
 
-/** Latest persisted record, or null when storage is unavailable. */
+/** Latest persisted record, or null when storage cannot be read. */
 function loadRecord(): PlayerRecord | null {
-  if (!storageOk) return null;
   try {
     return parseRecord(localStorage.getItem(RECORD_KEY));
   } catch {
-    storageOk = false;
     return null;
   }
 }
 
 function saveRecord(rec: PlayerRecord): void {
-  if (!storageOk) return;
   try {
     localStorage.setItem(RECORD_KEY, JSON.stringify(rec));
+    unsaved = false;
   } catch {
-    storageOk = false;
+    unsaved = true;
   }
 }
 
@@ -387,7 +385,8 @@ function finishGame(wait: number): void {
   if (!recorded) {
     recorded = true;
     const shots = computeStats(game.log, game.player).player.shots;
-    record = updateRecord(loadRecord() ?? record, game.winner, shots);
+    const base = unsaved ? record : (loadRecord() ?? record);
+    record = updateRecord(base, game.winner, shots);
     saveRecord(record);
   }
   sinkTimers.push(setTimeout(showGameOver, wait));
