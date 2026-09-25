@@ -16,6 +16,10 @@ const AI_DELAY_MAX_MS = 10000;
 const aiDelayMs = (): number =>
   AI_DELAY_MIN_MS + Math.random() * (AI_DELAY_MAX_MS - AI_DELAY_MIN_MS);
 
+const SINK_STAGGER_MS = 120;
+const SINK_CELL_MS = 900;
+const sinkDurationMs = (len: number): number => SINK_CELL_MS + SINK_STAGGER_MS * (len - 1);
+
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
   if (!el) throw new Error(`Missing #${id}`);
@@ -41,6 +45,10 @@ let game = new Game();
 let orientation: Orientation = 'h';
 let hoverCell: number | null = null;
 let aiTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Cells currently playing the sink animation, mapped to their stagger order. */
+const sinking = new Map<Board, Map<number, number>>();
+let sinkTimers: ReturnType<typeof setTimeout>[] = [];
 
 function buildBoard(el: HTMLElement): void {
   el.innerHTML = '';
@@ -80,6 +88,13 @@ function renderBoard(el: HTMLElement, board: Board, revealShips: boolean): void 
     if (shot === 'hit') cell.classList.add('hit');
     if (shot === 'miss') cell.classList.add('miss');
     if (sunk) cell.classList.add('sunk');
+    const order = sinking.get(board)?.get(i);
+    if (order !== undefined) {
+      cell.classList.add('sinking');
+      cell.style.setProperty('--order', String(order));
+    } else {
+      cell.style.removeProperty('--order');
+    }
     if (revealShips && shipId !== -1 && !shot) cell.classList.add('ship');
     if (preview && preview.cells.includes(i)) {
       cell.classList.add('preview');
@@ -95,6 +110,8 @@ function renderFleet(el: HTMLElement, board: Board, showPending: boolean): void 
     const ship = board.ships[k];
     li.textContent = `${spec.name} (${spec.length})`;
     if (ship && isSunk(ship)) li.classList.add('sunk');
+    const active = sinking.get(board);
+    if (ship && active && ship.cells.some((c) => active.has(c))) li.classList.add('sinking');
     if (showPending && !ship && k === board.ships.length) li.classList.add('pending');
     el.appendChild(li);
   });
@@ -152,6 +169,22 @@ function describe(ev: ShotEvent): string {
   return `${who} sank ${ev.by === 'player' ? 'the enemy' : 'your'} ${ev.ship?.name}!`;
 }
 
+function animateSink(board: Board, ev: ShotEvent): number {
+  if (ev.result !== 'sunk' || !ev.ship) return 0;
+  const cells = [...ev.ship.cells].sort((a, b) => a - b);
+  const map = sinking.get(board) ?? new Map<number, number>();
+  cells.forEach((c, k) => map.set(c, k));
+  sinking.set(board, map);
+  const duration = sinkDurationMs(cells.length);
+  sinkTimers.push(
+    setTimeout(() => {
+      for (const c of cells) map.delete(c);
+      render();
+    }, duration),
+  );
+  return duration;
+}
+
 function cellFromEvent(e: Event): number | null {
   const t = (e.target as HTMLElement).closest<HTMLElement>('.cell');
   return t?.dataset.i !== undefined ? Number(t.dataset.i) : null;
@@ -183,22 +216,24 @@ enemyBoardEl.addEventListener('click', (e) => {
   if (game.phase !== 'player-turn') return;
   const i = cellFromEvent(e);
   if (i === null || game.enemy.shots[i] !== undefined) return;
-  game.playerFire(i);
+  const ev = game.playerFire(i);
+  const wait = animateSink(game.enemy, ev);
   render();
-  afterPlayerShot(game.phase);
+  afterPlayerShot(game.phase, wait);
 });
 
-function afterPlayerShot(phase: Phase): void {
+function afterPlayerShot(phase: Phase, wait: number): void {
   if (phase === 'ai-turn') scheduleAi();
-  else if (phase === 'game-over') showGameOver();
+  else if (phase === 'game-over') sinkTimers.push(setTimeout(showGameOver, wait));
 }
 
 function scheduleAi(): void {
   aiTimer = setTimeout(() => {
     aiTimer = null;
-    game.aiFire();
+    const ev = game.aiFire();
+    const wait = animateSink(game.player, ev);
     render();
-    if (game.phase === 'game-over') showGameOver();
+    if (game.phase === 'game-over') sinkTimers.push(setTimeout(showGameOver, wait));
   }, aiDelayMs());
 }
 
@@ -220,6 +255,9 @@ function toggleOrientation(): void {
 function newGame(): void {
   if (aiTimer) clearTimeout(aiTimer);
   aiTimer = null;
+  sinkTimers.forEach(clearTimeout);
+  sinkTimers = [];
+  sinking.clear();
   game = new Game();
   hoverCell = null;
   overlay.hidden = true;

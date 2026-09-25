@@ -83,6 +83,16 @@ h2 {
     content: '…';
     animation: none;
   }
+
+  .cell.sinking,
+  .cell.sinking::before,
+  .fleet li.sinking {
+    animation: none;
+  }
+
+  .cell.sinking::before {
+    display: none;
+  }
 }
 
 main {
@@ -166,6 +176,55 @@ main {
   background: var(--sunk);
 }
 
+.cell.sinking {
+  position: relative;
+  z-index: 1;
+  animation: sink-cell 0.9s ease-out both;
+  animation-delay: calc(var(--order, 0) * 120ms);
+}
+
+.cell.sinking::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  animation: sink-ring 0.9s ease-out both;
+  animation-delay: inherit;
+}
+
+@keyframes sink-cell {
+  0% {
+    background: var(--hit);
+    transform: scale(1);
+  }
+  20% {
+    background: #ffd166;
+    transform: scale(1.35) rotate(-6deg);
+    box-shadow: 0 0 18px 6px rgb(240 180 41 / 0.8);
+  }
+  50% {
+    background: var(--hit);
+    transform: scale(0.9) rotate(4deg);
+    box-shadow: 0 0 0 0 rgb(240 180 41 / 0);
+  }
+  100% {
+    background: var(--sunk);
+    transform: scale(1);
+  }
+}
+
+@keyframes sink-ring {
+  0% {
+    transform: scale(0.4);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
 .fleet {
   list-style: none;
   padding: 0;
@@ -180,6 +239,26 @@ main {
 .fleet li.sunk {
   text-decoration: line-through;
   opacity: 0.5;
+}
+
+.fleet li.sinking {
+  animation: sink-label 1.2s ease-out both;
+}
+
+@keyframes sink-label {
+  0% {
+    color: var(--accent);
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  60% {
+    color: var(--hit);
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
 }
 
 .fleet li.pending {
