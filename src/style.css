@@ -99,7 +99,7 @@ main {
   cursor: crosshair;
 }
 
-.board.interactive .cell:not(.hit):not(.miss):hover {
+.board.interactive .cell:not(.hit):not(.miss):not(.preview):hover {
   background: var(--water-hover);
 }
 

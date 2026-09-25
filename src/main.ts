@@ -1,4 +1,12 @@
-import { canPlace, isSunk, placeShip, randomFleet, removeShip, shipCells } from './engine/board';
+import {
+  canPlace,
+  isSunk,
+  placeShip,
+  randomFleet,
+  removeShip,
+  shipCells,
+  shipCellsClamped,
+} from './engine/board';
 import { Game, Phase, ShotEvent } from './engine/game';
 import { Board, FLEET, Orientation, SIZE, colOf, rowOf } from './engine/types';
 
@@ -44,14 +52,20 @@ function buildBoard(el: HTMLElement): void {
 
 const label = (i: number): string => `${String.fromCharCode(65 + rowOf(i))}${colOf(i) + 1}`;
 
-function previewCells(): number[] | null {
+function previewCells(): { cells: number[]; ok: boolean } | null {
   if (hoverCell === null || game.phase !== 'placement' || game.fleetComplete) return null;
-  return shipCells(rowOf(hoverCell), colOf(hoverCell), game.nextShip.length, orientation);
+  const r = rowOf(hoverCell);
+  const c = colOf(hoverCell);
+  const len = game.nextShip.length;
+  const exact = shipCells(r, c, len, orientation);
+  return {
+    cells: exact ?? shipCellsClamped(r, c, len, orientation),
+    ok: canPlace(game.player, exact),
+  };
 }
 
 function renderBoard(el: HTMLElement, board: Board, revealShips: boolean): void {
   const preview = el === playerBoardEl ? previewCells() : null;
-  const previewOk = preview ? canPlace(board, preview) : false;
   const cells = el.children;
   for (let i = 0; i < cells.length; i++) {
     const cell = cells[i] as HTMLElement;
@@ -63,9 +77,9 @@ function renderBoard(el: HTMLElement, board: Board, revealShips: boolean): void 
     if (shot === 'miss') cell.classList.add('miss');
     if (sunk) cell.classList.add('sunk');
     if (revealShips && shipId !== -1 && !shot) cell.classList.add('ship');
-    if (preview && preview.includes(i)) {
+    if (preview && preview.cells.includes(i)) {
       cell.classList.add('preview');
-      if (!previewOk) cell.classList.add('invalid');
+      if (!preview.ok) cell.classList.add('invalid');
     }
   }
 }

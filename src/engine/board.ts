@@ -36,6 +36,22 @@ export function shipCells(
   return cells;
 }
 
+/** Like {@link shipCells} but keeps the in-bounds portion of a ship that overflows the grid. */
+export function shipCellsClamped(
+  r: number,
+  c: number,
+  length: number,
+  o: Orientation,
+): number[] {
+  const cells: number[] = [];
+  for (let k = 0; k < length; k++) {
+    const rr = o === 'v' ? r + k : r;
+    const cc = o === 'h' ? c + k : c;
+    if (inBounds(rr, cc)) cells.push(idx(rr, cc));
+  }
+  return cells;
+}
+
 export function canPlace(board: Board, cells: readonly number[] | null): boolean {
   if (!cells) return false;
   return cells.every((i) => board.occupancy[i] === -1);
