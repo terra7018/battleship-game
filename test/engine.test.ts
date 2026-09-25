@@ -6,7 +6,10 @@ import {
   createBoard,
   fireAt,
   placeShip,
+  canMove,
+  moveShip,
   randomFleet,
+  randomFleetRemaining,
   removeShip,
   shipCells,
 } from '../src/engine/board';
@@ -73,6 +76,85 @@ describe('placement', () => {
     expect(b.ships[0].id).toBe(0);
     expect(b.occupancy[idx(2, 0)]).toBe(0);
     expect(b.occupancy[idx(0, 0)]).toBe(-1);
+  });
+
+  it('randomizes only the remaining ships, keeping placed ones', () => {
+    for (let seed = 1; seed < 30; seed++) {
+      const b = createBoard();
+      const carrier = shipCells(0, 0, 5, 'h')!;
+      const battleship = shipCells(9, 6, 4, 'h')!;
+      placeShip(b, FLEET[0], carrier);
+      placeShip(b, FLEET[1], battleship);
+      randomFleetRemaining(b, seeded(seed));
+      expect(b.ships).toHaveLength(FLEET.length);
+      expect(b.ships[0].cells).toEqual(carrier);
+      expect(b.ships[1].cells).toEqual(battleship);
+      b.ships.forEach((s, k) => {
+        expect(s.id).toBe(k);
+        expect(s.name).toBe(FLEET[k].name);
+        for (const i of s.cells) expect(b.occupancy[i]).toBe(k);
+      });
+      const occupied = Array.from(b.occupancy).filter((v) => v !== -1).length;
+      expect(occupied).toBe(FLEET.reduce((n, s) => n + s.length, 0));
+    }
+  });
+
+  it('randomizing remaining on a full board is a no-op', () => {
+    const b = createBoard();
+    randomFleet(b, seeded(3));
+    const before = b.ships.map((s) => [...s.cells]);
+    randomFleetRemaining(b, seeded(4));
+    expect(b.ships.map((s) => [...s.cells])).toEqual(before);
+  });
+
+  it('randomFleetRemaining fills by identity when ships were placed out of fleet order', () => {
+    const b = createBoard();
+    const destroyer = shipCells(0, 0, 2, 'h')!;
+    placeShip(b, FLEET[4], destroyer);
+    randomFleetRemaining(b, seeded(5));
+    expect(b.ships[0].cells).toEqual(destroyer);
+    expect(b.ships.map((s) => s.name).sort()).toEqual(FLEET.map((s) => s.name).sort());
+  });
+
+  it('randomFleetRemaining consumes one fleet entry per placed ship for duplicate names', () => {
+    const b = createBoard();
+    const fleet = [
+      { name: 'Patrol', length: 2 },
+      { name: 'Patrol', length: 2 },
+    ];
+    placeShip(b, fleet[0], shipCells(0, 0, 2, 'h')!);
+    randomFleetRemaining(b, seeded(6), fleet);
+    expect(b.ships).toHaveLength(2);
+    expect(b.ships.map((s) => s.name)).toEqual(['Patrol', 'Patrol']);
+  });
+
+  it('moves a ship, keeping its id and freeing its old cells', () => {
+    const b = createBoard();
+    placeShip(b, FLEET[0], shipCells(0, 0, 5, 'h')!);
+    placeShip(b, FLEET[4], shipCells(2, 0, 2, 'h')!);
+    // overlapping its own cells is fine; overlapping another ship is not
+    expect(canMove(b, 0, shipCells(0, 2, 5, 'h'))).toBe(true);
+    expect(canMove(b, 0, shipCells(0, 0, 5, 'v'))).toBe(false);
+    expect(canMove(b, 0, null)).toBe(false);
+    expect(canMove(b, 7, shipCells(5, 0, 5, 'h'))).toBe(false);
+    // cell count must match the ship's length
+    expect(canMove(b, 0, [])).toBe(false);
+    expect(canMove(b, 0, shipCells(5, 0, 4, 'h'))).toBe(false);
+    expect(moveShip(b, 0, [])).toBe(false);
+    expect(moveShip(b, 0, shipCells(0, 0, 5, 'v')!)).toBe(false);
+    expect(b.ships[0].cells).toEqual(shipCells(0, 0, 5, 'h'));
+
+    expect(moveShip(b, 0, shipCells(5, 1, 5, 'v')!)).toBe(true);
+    expect(b.ships).toHaveLength(2);
+    expect(b.ships[0].id).toBe(0);
+    expect(b.ships[0].name).toBe('Carrier');
+    expect(b.ships[0].cells).toEqual(shipCells(5, 1, 5, 'v'));
+    expect(b.ships[1].id).toBe(1);
+    expect(b.occupancy[idx(0, 0)]).toBe(-1);
+    expect(b.occupancy[idx(0, 4)]).toBe(-1);
+    expect(b.occupancy[idx(5, 1)]).toBe(0);
+    expect(b.occupancy[idx(9, 1)]).toBe(0);
+    expect(b.occupancy[idx(2, 0)]).toBe(1);
   });
 });
 

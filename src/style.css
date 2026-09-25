@@ -259,6 +259,18 @@ body:not(.pointer-input) .board.interactive .cell:not(.hit):not(.miss):not(.prev
   background: var(--ship);
 }
 
+.board .cell.movable,
+.board.interactive .cell.movable:not(.hit):not(.miss) {
+  cursor: grab;
+  touch-action: none;
+}
+
+.board.dragging,
+.board.dragging .cell,
+.board.dragging.interactive .cell:not(.hit):not(.miss) {
+  cursor: grabbing;
+}
+
 .cell.preview {
   background: #4f9d69;
 }
