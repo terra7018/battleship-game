@@ -375,7 +375,7 @@ playerBoardEl.addEventListener('click', (e) => {
 
 playerBoardEl.addEventListener('pointerdown', (e) => {
   if (game.phase !== 'placement' || drag || e.button !== 0) return;
-  spentPointer = null;
+  spentPointers.delete(e.pointerId);
   const i = cellFromEvent(e);
   if (i === null) return;
   const shipId = game.player.occupancy[i];
@@ -402,8 +402,8 @@ playerBoardEl.addEventListener('pointermove', (e) => {
   }
 });
 
-/** Pointer whose press started a drag that has since ended; its eventual click must not place a ship. */
-let spentPointer: number | null = null;
+/** Pointers whose press started a drag that has since ended; their eventual click must not place a ship. */
+const spentPointers = new Set<number>();
 
 /**
  * Ends the current drag. `commit` moves the ship if the drop is valid; `pointerEnded` tells
@@ -418,7 +418,7 @@ function endDrag(commit: boolean, pointerEnded: boolean): void {
   if (playerBoardEl.hasPointerCapture(pointerId)) playerBoardEl.releasePointerCapture(pointerId);
   // A plain press-and-release on a ship may still fall through to click-to-place; a real drag,
   // or a press whose drag was cancelled externally, must not.
-  spentPointer = drag.moved || !pointerEnded ? pointerId : null;
+  if (drag.moved || !pointerEnded) spentPointers.add(pointerId);
   drag = null;
   render();
 }
@@ -426,8 +426,9 @@ function endDrag(commit: boolean, pointerEnded: boolean): void {
 playerBoardEl.addEventListener(
   'click',
   (e) => {
-    if (spentPointer === null) return;
-    spentPointer = null;
+    // click is a PointerEvent in current browsers; fall back to any spent pointer otherwise
+    const id = e instanceof PointerEvent ? e.pointerId : spentPointers.values().next().value;
+    if (id === undefined || !spentPointers.delete(id)) return;
     e.stopImmediatePropagation();
   },
   true,
@@ -438,7 +439,7 @@ playerBoardEl.addEventListener('pointerup', (e) => {
 });
 playerBoardEl.addEventListener('pointercancel', (e) => {
   if (drag && e.pointerId === drag.pointerId) endDrag(false, true);
-  else if (e.pointerId === spentPointer) spentPointer = null;
+  else spentPointers.delete(e.pointerId);
 });
 
 enemyBoardEl.addEventListener('click', (e) => {
