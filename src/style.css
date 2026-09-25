@@ -329,6 +329,7 @@ button.primary:hover:not(:disabled) {
 .overlay {
   position: fixed;
   inset: 0;
+  z-index: 10;
   background: rgb(0 0 0 / 0.65);
   display: flex;
   align-items: center;
