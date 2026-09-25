@@ -40,6 +40,12 @@ const overlay = $('overlay');
 const overlayTitle = $('overlay-title');
 const overlayText = $('overlay-text');
 const overlayNew = $<HTMLButtonElement>('overlay-new');
+const dialog = overlay.querySelector<HTMLElement>('.dialog')!;
+const background = [
+  document.querySelector<HTMLElement>('header')!,
+  document.querySelector<HTMLElement>('main')!,
+  $('controls'),
+];
 
 let game = new Game();
 let orientation: Orientation = 'h';
@@ -252,6 +258,41 @@ function showGameOver(): void {
     ? `You destroyed the enemy fleet in ${shots} shots.`
     : 'The enemy sank your entire fleet.';
   overlay.hidden = false;
+  for (const el of background) el.inert = true;
+  overlayNew.focus();
+}
+
+const FOCUSABLE =
+  'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
+
+function trapFocus(e: KeyboardEvent): void {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  const focusable = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)];
+  if (focusable.length === 0) {
+    e.preventDefault();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+  if (e.shiftKey && (active === first || !dialog.contains(active))) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && (active === last || !dialog.contains(active))) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
+function hideGameOver(): void {
+  if (overlay.hidden) return;
+  overlay.hidden = true;
+  for (const el of background) el.inert = false;
+  rotateBtn.focus();
 }
 
 function toggleOrientation(): void {
@@ -267,8 +308,8 @@ function newGame(): void {
   sinking.clear();
   game = new Game();
   hoverCell = null;
-  overlay.hidden = true;
   render();
+  hideGameOver();
 }
 
 rotateBtn.addEventListener('click', toggleOrientation);
@@ -287,7 +328,9 @@ startBtn.addEventListener('click', () => {
 });
 newGameBtn.addEventListener('click', newGame);
 overlayNew.addEventListener('click', newGame);
+overlay.addEventListener('keydown', trapFocus);
 document.addEventListener('keydown', (e) => {
+  if (!overlay.hidden) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key.toLowerCase() === 'r' && game.phase === 'placement') toggleOrientation();
 });
