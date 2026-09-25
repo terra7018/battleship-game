@@ -57,6 +57,8 @@ const cursor = new Map<HTMLElement, number>([
   [enemyBoardEl, 0],
 ]);
 let aiTimer: ReturnType<typeof setTimeout> | null = null;
+/** True when the most recent user input came from a pointer rather than the keyboard. */
+let pointerInput = false;
 
 /** Cells currently playing the sink animation, mapped to their stagger order. */
 const sinking = new Map<Board, Map<number, number>>();
@@ -221,8 +223,7 @@ playerBoardEl.addEventListener('mousemove', (e) => {
   }
 });
 playerBoardEl.addEventListener('mouseleave', () => {
-  const focused = document.activeElement;
-  const byKeyboard = focused?.matches('#player-board .cell:focus-visible') ?? false;
+  const byKeyboard = !pointerInput && playerBoardEl.contains(document.activeElement);
   hoverCell = byKeyboard ? cursor.get(playerBoardEl)! : null;
   render();
 });
@@ -385,6 +386,14 @@ startBtn.addEventListener('click', () => {
 newGameBtn.addEventListener('click', newGame);
 overlayNew.addEventListener('click', newGame);
 overlay.addEventListener('keydown', trapFocus);
+document.addEventListener('pointerdown', () => {
+  pointerInput = true;
+  document.body.classList.add('pointer-input');
+}, true);
+document.addEventListener('keydown', () => {
+  pointerInput = false;
+  document.body.classList.remove('pointer-input');
+}, true);
 document.addEventListener('keydown', (e) => {
   if (!overlay.hidden) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;

@@ -161,8 +161,12 @@ main {
   z-index: 1;
 }
 
-.board.interactive .cell:not(.hit):not(.miss):not(.preview):focus-visible {
+body:not(.pointer-input) .board.interactive .cell:not(.hit):not(.miss):not(.preview):focus-visible {
   background: var(--water-hover);
+}
+
+.pointer-input .cell:focus-visible {
+  outline: none;
 }
 
 .cell.ship {
