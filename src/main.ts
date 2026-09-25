@@ -103,17 +103,24 @@ function renderBoard(el: HTMLElement, board: Board, revealShips: boolean): void 
   }
 }
 
-function renderFleet(el: HTMLElement, board: Board, showPending: boolean): void {
+function buildFleet(el: HTMLElement): void {
   el.innerHTML = '';
-  FLEET.forEach((spec, k) => {
+  for (const spec of FLEET) {
     const li = document.createElement('li');
-    const ship = board.ships[k];
     li.textContent = `${spec.name} (${spec.length})`;
+    el.appendChild(li);
+  }
+}
+
+function renderFleet(el: HTMLElement, board: Board, showPending: boolean): void {
+  const active = sinking.get(board);
+  FLEET.forEach((_, k) => {
+    const li = el.children[k] as HTMLElement;
+    const ship = board.ships[k];
+    li.className = '';
     if (ship && isSunk(ship)) li.classList.add('sunk');
-    const active = sinking.get(board);
     if (ship && active && ship.cells.some((c) => active.has(c))) li.classList.add('sinking');
     if (showPending && !ship && k === board.ships.length) li.classList.add('pending');
-    el.appendChild(li);
   });
 }
 
@@ -287,4 +294,6 @@ document.addEventListener('keydown', (e) => {
 
 buildBoard(playerBoardEl);
 buildBoard(enemyBoardEl);
+buildFleet(playerFleetEl);
+buildFleet(enemyFleetEl);
 render();
