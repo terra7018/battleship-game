@@ -10,7 +10,11 @@ import {
 import { Game, Phase, ShotEvent } from './engine/game';
 import { Board, FLEET, Orientation, SIZE, colOf, rowOf } from './engine/types';
 
-const AI_DELAY_MS = 700;
+const AI_DELAY_MIN_MS = 3000;
+const AI_DELAY_MAX_MS = 10000;
+
+const aiDelayMs = (): number =>
+  AI_DELAY_MIN_MS + Math.random() * (AI_DELAY_MAX_MS - AI_DELAY_MIN_MS);
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -114,6 +118,7 @@ function render(): void {
   rotateBtn.textContent = `Rotate (R): ${orientation === 'h' ? 'Horizontal' : 'Vertical'}`;
 
   statusEl.textContent = statusText();
+  statusEl.classList.toggle('thinking', game.phase === 'ai-turn');
 }
 
 function statusText(): string {
@@ -124,8 +129,10 @@ function statusText(): string {
         : `Place your ${game.nextShip.name} (${game.nextShip.length} cells)`;
     case 'player-turn':
       return lastShotText() || 'Your turn — fire at Enemy Waters';
-    case 'ai-turn':
-      return 'Enemy is aiming…';
+    case 'ai-turn': {
+      const last = lastShotText();
+      return last ? `${last} Enemy is thinking` : 'Enemy is thinking';
+    }
     case 'game-over':
       return game.winner === 'player' ? 'Victory! Enemy fleet destroyed.' : 'Defeat. Your fleet was sunk.';
   }
@@ -192,7 +199,7 @@ function scheduleAi(): void {
     game.aiFire();
     render();
     if (game.phase === 'game-over') showGameOver();
-  }, AI_DELAY_MS);
+  }, aiDelayMs());
 }
 
 function showGameOver(): void {
