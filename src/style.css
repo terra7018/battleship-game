@@ -366,3 +366,33 @@ button.primary:hover:not(:disabled) {
   font-size: 1.75rem;
   color: var(--text);
 }
+
+.stats {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0.35rem 1.25rem;
+  margin: 1.25rem 0 0.75rem;
+  text-align: left;
+}
+
+.stats dt {
+  color: #9fb3c8;
+}
+
+.stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.record {
+  margin: 0 0 1.25rem;
+  font-size: 0.9rem;
+  color: #9fb3c8;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}

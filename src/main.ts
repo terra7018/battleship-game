@@ -9,6 +9,16 @@ import {
 } from './engine/board';
 import { isArrowKey, moveCursor } from './engine/cursor';
 import { Game, Phase, ShotEvent } from './engine/game';
+import {
+  GameStats,
+  PlayerRecord,
+  SideStats,
+  computeStats,
+  formatRecord,
+  formatStats,
+  parseRecord,
+  updateRecord,
+} from './engine/stats';
 import { Board, FLEET, Orientation, SIZE, colOf, rowOf } from './engine/types';
 
 const AI_DELAY_MIN_MS = 3000;
@@ -40,7 +50,10 @@ const newGameBtn = $<HTMLButtonElement>('new-game');
 const overlay = $('overlay');
 const overlayTitle = $('overlay-title');
 const overlayText = $('overlay-text');
+const overlayStats = $('overlay-stats');
+const overlayRecord = $('overlay-record');
 const overlayNew = $<HTMLButtonElement>('overlay-new');
+const overlayInspect = $<HTMLButtonElement>('overlay-inspect');
 const dialog = overlay.querySelector<HTMLElement>('.dialog')!;
 const background = [
   document.querySelector<HTMLElement>('header')!,
@@ -48,7 +61,30 @@ const background = [
   $('controls'),
 ];
 
+const RECORD_KEY = 'battleship.record';
+
+function loadRecord(): PlayerRecord {
+  try {
+    return parseRecord(localStorage.getItem(RECORD_KEY));
+  } catch {
+    return parseRecord(null);
+  }
+}
+
+function saveRecord(rec: PlayerRecord): void {
+  try {
+    localStorage.setItem(RECORD_KEY, JSON.stringify(rec));
+  } catch {
+    /* storage unavailable (private mode, quota) — record is kept in memory only */
+  }
+}
+
+let record = loadRecord();
 let game = new Game();
+/** Set once the finished game has been added to the persisted record. */
+let recorded = false;
+/** True while the player studies the revealed boards after dismissing the overlay. */
+let inspecting = false;
 let orientation: Orientation = 'h';
 let hoverCell: number | null = null;
 /** Roving-tabindex cursor per board: the single cell that is tabbable. */
@@ -175,8 +211,11 @@ function statusText(): string {
       const last = lastShotText();
       return last ? `${last} Enemy is thinking` : 'Enemy is thinking';
     }
-    case 'game-over':
-      return game.winner === 'player' ? 'Victory! Enemy fleet destroyed.' : 'Defeat. Your fleet was sunk.';
+    case 'game-over': {
+      const outcome =
+        game.winner === 'player' ? 'Victory! Enemy fleet destroyed.' : 'Defeat. Your fleet was sunk.';
+      return inspecting ? `${outcome} ${formatStats(computeStats(game.log, game.player))}` : outcome;
+    }
   }
 }
 
@@ -308,13 +347,37 @@ function scheduleAi(): void {
 function showGameOver(): void {
   const won = game.winner === 'player';
   overlayTitle.textContent = won ? 'Victory!' : 'Defeat';
-  const shots = game.log.filter((e) => e.by === 'player').length;
+  const stats = computeStats(game.log, game.player);
   overlayText.textContent = won
-    ? `You destroyed the enemy fleet in ${shots} shots.`
+    ? `You destroyed the enemy fleet in ${stats.player.shots} shots.`
     : 'The enemy sank your entire fleet.';
+  if (!recorded) {
+    recorded = true;
+    record = updateRecord(record, game.winner, stats.player.shots);
+    saveRecord(record);
+  }
+  renderStats(stats);
+  overlayRecord.textContent = formatRecord(record);
   overlay.hidden = false;
   for (const el of background) el.inert = true;
   overlayNew.focus();
+}
+
+function renderStats(s: GameStats): void {
+  const side = (x: SideStats): string => `${x.shots} shots · ${x.hits} hits · ${x.accuracy}%`;
+  const rows: [string, string][] = [
+    ['You', side(s.player)],
+    ['Enemy', side(s.enemy)],
+    ['Your ships left', String(s.shipsRemaining)],
+  ];
+  overlayStats.innerHTML = '';
+  for (const [k, v] of rows) {
+    const dt = document.createElement('dt');
+    dt.textContent = k;
+    const dd = document.createElement('dd');
+    dd.textContent = v;
+    overlayStats.append(dt, dd);
+  }
 }
 
 const FOCUSABLE =
@@ -343,11 +406,18 @@ function trapFocus(e: KeyboardEvent): void {
   }
 }
 
-function hideGameOver(): void {
+function hideGameOver(focusTarget: HTMLElement = rotateBtn): void {
   if (overlay.hidden) return;
   overlay.hidden = true;
   for (const el of background) el.inert = false;
-  rotateBtn.focus();
+  focusTarget.focus();
+}
+
+function inspectBattlefield(): void {
+  if (game.phase !== 'game-over') return;
+  inspecting = true;
+  render();
+  hideGameOver(newGameBtn);
 }
 
 function toggleOrientation(): void {
@@ -362,6 +432,8 @@ function newGame(): void {
   sinkTimers = [];
   sinking.clear();
   game = new Game();
+  recorded = false;
+  inspecting = false;
   hoverCell = null;
   cursor.set(playerBoardEl, 0);
   cursor.set(enemyBoardEl, 0);
@@ -385,6 +457,7 @@ startBtn.addEventListener('click', () => {
 });
 newGameBtn.addEventListener('click', newGame);
 overlayNew.addEventListener('click', newGame);
+overlayInspect.addEventListener('click', inspectBattlefield);
 overlay.addEventListener('keydown', trapFocus);
 document.addEventListener('pointerdown', () => {
   pointerInput = true;
