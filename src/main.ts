@@ -283,7 +283,6 @@ function render(): void {
   muteBtn.setAttribute('aria-pressed', String(sfx.muted));
   muteBtn.setAttribute('aria-label', sfx.muted ? 'Unmute sound' : 'Mute sound');
   muteBtn.title = sfx.muted ? 'Unmute sound' : 'Mute sound';
-  muteBtn.textContent = sfx.muted ? '\u{1F507}' : '\u{1F50A}';
 }
 
 function statusText(): string {
