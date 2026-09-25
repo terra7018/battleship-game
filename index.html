@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Battleship</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Battleship</h1>
+      <p id="status" class="status" aria-live="polite"></p>
+    </header>
+
+    <main>
+      <section class="board-wrap">
+        <h2>Your Fleet</h2>
+        <div id="player-board" class="board" role="grid" aria-label="Your fleet"></div>
+        <ul id="player-fleet" class="fleet"></ul>
+      </section>
+
+      <section class="board-wrap">
+        <h2>Enemy Waters</h2>
+        <div id="enemy-board" class="board enemy" role="grid" aria-label="Enemy waters"></div>
+        <ul id="enemy-fleet" class="fleet"></ul>
+      </section>
+    </main>
+
+    <div id="controls" class="controls">
+      <button id="rotate" type="button">Rotate (R)</button>
+      <button id="random" type="button">Randomize</button>
+      <button id="undo" type="button">Undo</button>
+      <button id="start" type="button" class="primary" disabled>Start Battle</button>
+      <button id="new-game" type="button" hidden>New Game</button>
+    </div>
+
+    <div id="overlay" class="overlay" hidden>
+      <div class="dialog">
+        <h2 id="overlay-title"></h2>
+        <p id="overlay-text"></p>
+        <button id="overlay-new" type="button" class="primary">Play Again</button>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
