@@ -236,6 +236,7 @@ startBtn.addEventListener('click', () => {
 newGameBtn.addEventListener('click', newGame);
 overlayNew.addEventListener('click', newGame);
 document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key.toLowerCase() === 'r' && game.phase === 'placement') toggleOrientation();
 });
 

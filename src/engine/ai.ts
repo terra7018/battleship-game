@@ -48,6 +48,11 @@ export class HuntTargetAi {
 
     const hitSet = new Set(this.hits);
     const isHit = (r: number, c: number): boolean => inBounds(r, c) && hitSet.has(idx(r, c));
+    const neighbours = (r: number, c: number): void => {
+      for (const [dr, dc] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+        if (open(r + dr, c + dc)) out.add(idx(r + dr, c + dc));
+      }
+    };
     for (const h of this.hits) {
       const r = rowOf(h);
       const c = colOf(h);
@@ -67,10 +72,13 @@ export class HuntTargetAi {
           if (open(rr, cc)) out.add(idx(rr, cc));
         }
       } else {
-        for (const [dr, dc] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
-          if (open(r + dr, c + dc)) out.add(idx(r + dr, c + dc));
-        }
+        neighbours(r, c);
       }
+    }
+    // Adjacent hits may belong to two different ships lying side by side; if the
+    // assumed axis is exhausted, fall back to every open neighbour of every hit.
+    if (out.size === 0) {
+      for (const h of this.hits) neighbours(rowOf(h), colOf(h));
     }
     return [...out];
   }

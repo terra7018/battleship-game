@@ -71,7 +71,7 @@ export function removeShip(board: Board, shipId: number): void {
   for (const i of ship.cells) board.occupancy[i] = -1;
   board.ships.splice(shipId, 1);
   board.ships.forEach((s, id) => {
-    (s as { id: number }).id = id;
+    s.id = id;
     for (const i of s.cells) board.occupancy[i] = id;
   });
 }
