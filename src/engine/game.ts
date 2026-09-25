@@ -1,5 +1,6 @@
-import { HuntTargetAi } from './ai';
+import { Ai } from './ai';
 import { Rng, allSunk, createBoard, fireAt, randomFleet } from './board';
+import { DEFAULT_DIFFICULTY, Difficulty, createAi } from './difficulty';
 import { Board, FLEET, Ship, ShotResult } from './types';
 
 export type Phase = 'placement' | 'player-turn' | 'ai-turn' | 'game-over';
@@ -26,11 +27,27 @@ export class Game {
   readonly player: Board = createBoard();
   readonly enemy: Board = createBoard();
   readonly log: ShotEvent[] = [];
-  private readonly ai: HuntTargetAi;
+  private ai: Ai;
+  private _difficulty: Difficulty;
 
-  constructor(rng: Rng = Math.random) {
-    this.ai = new HuntTargetAi(rng);
+  constructor(
+    private readonly rng: Rng = Math.random,
+    difficulty: Difficulty = DEFAULT_DIFFICULTY,
+  ) {
+    this._difficulty = difficulty;
+    this.ai = createAi(difficulty, rng);
     randomFleet(this.enemy, rng);
+  }
+
+  get difficulty(): Difficulty {
+    return this._difficulty;
+  }
+
+  /** Swap the AI opponent; only allowed before the battle starts. */
+  setDifficulty(difficulty: Difficulty): void {
+    if (this.phase !== 'placement') throw new Error('Game already started');
+    this._difficulty = difficulty;
+    this.ai = createAi(difficulty, this.rng);
   }
 
   get fleetComplete(): boolean {

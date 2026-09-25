@@ -22,9 +22,33 @@ import {
 import { AiPace, DEFAULT_PACE, aiDelayMs, isAiPace } from './engine/pace';
 import { outcomeSound, parseMuted, shotSound } from './engine/sound';
 import { Sfx } from './audio';
+import {
+  DEFAULT_DIFFICULTY,
+  DIFFICULTY_LABELS,
+  Difficulty,
+  isDifficulty,
+} from './engine/difficulty';
 import { Board, FLEET, Orientation, SIZE, colOf, rowOf } from './engine/types';
 
 const PACE_KEY = 'battleship.aiPace';
+const DIFFICULTY_KEY = 'battleship.aiDifficulty';
+
+function loadDifficulty(): Difficulty {
+  try {
+    const v = localStorage.getItem(DIFFICULTY_KEY);
+    return isDifficulty(v) ? v : DEFAULT_DIFFICULTY;
+  } catch {
+    return DEFAULT_DIFFICULTY;
+  }
+}
+
+function saveDifficulty(d: Difficulty): void {
+  try {
+    localStorage.setItem(DIFFICULTY_KEY, d);
+  } catch {
+    /* storage unavailable; keep in-memory choice */
+  }
+}
 
 function loadPace(): AiPace {
   try {
@@ -92,6 +116,9 @@ const overlayNew = $<HTMLButtonElement>('overlay-new');
 const overlayInspect = $<HTMLButtonElement>('overlay-inspect');
 const paceSelect = $<HTMLSelectElement>('ai-pace');
 const muteBtn = $<HTMLButtonElement>('mute');
+const difficultySelect = $<HTMLSelectElement>('ai-difficulty');
+const difficultyBadge = $('difficulty-badge');
+const overlayDifficulty = $('overlay-difficulty');
 const dialog = overlay.querySelector<HTMLElement>('.dialog')!;
 const background = [
   document.querySelector<HTMLElement>('header')!,
@@ -131,7 +158,9 @@ function commitRecord(): PlayerRecord {
 let baseline = loadRecord() ?? parseRecord(null);
 /** Record shown to the player (baseline plus any pending results). */
 let record = baseline;
-let game = new Game();
+let difficulty: Difficulty = loadDifficulty();
+difficultySelect.value = difficulty;
+let game = new Game(Math.random, difficulty);
 /** Set once the finished game has been added to the persisted record. */
 let recorded = false;
 /** True while the player studies the revealed boards after dismissing the overlay. */
@@ -281,6 +310,9 @@ function render(): void {
   turnEl.classList.toggle('enemy', game.phase === 'ai-turn');
 
   muteBtn.setAttribute('aria-pressed', String(sfx.muted));
+  difficultySelect.parentElement!.hidden = !placing;
+  difficultyBadge.hidden = placing;
+  difficultyBadge.textContent = `AI: ${DIFFICULTY_LABELS[game.difficulty]}`;
 }
 
 function statusText(): string {
@@ -463,6 +495,7 @@ function showGameOver(): void {
     ? `You destroyed the enemy fleet in ${stats.player.shots} shots.`
     : 'The enemy sank your entire fleet.';
   renderStats(stats);
+  overlayDifficulty.textContent = `AI difficulty: ${DIFFICULTY_LABELS[game.difficulty]}`;
   overlayRecord.textContent = formatRecord(record);
   overlay.hidden = false;
   for (const el of background) el.inert = true;
@@ -542,7 +575,7 @@ function newGame(): void {
   splashTimers.forEach(clearTimeout);
   splashTimers = [];
   splashing.clear();
-  game = new Game();
+  game = new Game(Math.random, difficulty);
   recorded = false;
   inspecting = false;
   hoverCell = null;
@@ -578,6 +611,12 @@ muteBtn.addEventListener('click', () => {
   if (!sfx.muted) sfx.unlock();
   saveMuted(sfx.muted);
   render();
+});
+difficultySelect.addEventListener('change', () => {
+  difficulty = isDifficulty(difficultySelect.value) ? difficultySelect.value : DEFAULT_DIFFICULTY;
+  difficultySelect.value = difficulty;
+  saveDifficulty(difficulty);
+  if (game.phase === 'placement') game.setDifficulty(difficulty);
 });
 overlayNew.addEventListener('click', newGame);
 overlayInspect.addEventListener('click', inspectBattlefield);
