@@ -79,7 +79,6 @@ function saveRecord(rec: PlayerRecord): void {
   }
 }
 
-
 let record = loadRecord();
 let game = new Game();
 /** Set once the finished game has been added to the persisted record. */
